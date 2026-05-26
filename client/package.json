@@ -1,0 +1,10 @@
+{
+  "name": "justpoker-client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview"
+  }
+}
