@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { logger } from './utils/logger';
 import { database } from './services/database.service';
 import { socketService } from './services/socket.service';
+import roomRouter from './modules/room/room.controller';
 
 dotenv.config();
 
@@ -22,6 +23,9 @@ app.use(express.json());
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Routes
+app.use('/api/rooms', roomRouter);
 
 // Initialize services
 async function initialize() {
