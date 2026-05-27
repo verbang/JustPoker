@@ -23,8 +23,9 @@ export class RoomManager {
     this.rooms.set(roomCode, room);
     this.roomPlayers.set(roomCode, new Map());
 
-    // Add host as first player
+    // Add host as first player and auto-seat at position 1
     this.joinRoom(roomCode, hostId, hostNickname, initialChips);
+    this.selectSeat(roomCode, hostId, 1);
 
     return room;
   }
@@ -94,9 +95,33 @@ export class RoomManager {
   }
 
   getSeatedPlayers(roomCode: string): RoomPlayer[] {
-    return this.getRoomPlayers(roomCode).filter(p =>
-      p.status === 'seated' || p.status === 'playing'
-    );
+    return this.getRoomPlayers(roomCode)
+      .filter(p => p.status === 'seated' || p.status === 'ready' || p.status === 'playing')
+      .sort((a, b) => (a.seatNumber || 0) - (b.seatNumber || 0));
+  }
+
+  readyPlayer(roomCode: string, userId: string): boolean {
+    const players = this.roomPlayers.get(roomCode);
+    if (!players) return false;
+
+    const player = players.get(userId);
+    if (!player || player.status !== 'seated') return false;
+
+    player.status = 'ready';
+    return true;
+  }
+
+  /**
+   * Check if all seated players are ready (ready to start the game).
+   * Returns true if there are ≥2 players and all seated players have status 'ready'.
+   */
+  allSeatedPlayersReady(roomCode: string): boolean {
+    const players = this.getRoomPlayers(roomCode);
+    const seatedPlayers = players.filter(p => p.status === 'seated');
+    const readyPlayers = players.filter(p => p.status === 'ready');
+
+    // Must have at least 2 ready players, and no one still seated (not yet ready)
+    return readyPlayers.length >= 2 && seatedPlayers.length === 0;
   }
 
   rebuy(roomCode: string, userId: string, amount: number): boolean {

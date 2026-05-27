@@ -35,6 +35,10 @@ class SocketService {
     this.socket?.emit(SOCKET_EVENTS.SELECT_SEAT, { roomCode, seatNumber });
   }
 
+  playerReady(roomCode: string): void {
+    this.socket?.emit(SOCKET_EVENTS.PLAYER_READY, { roomCode });
+  }
+
   playerAction(roomCode: string, action: string, amount?: number): void {
     this.socket?.emit(SOCKET_EVENTS.PLAYER_ACTION, { roomCode, action, amount });
   }
@@ -49,6 +53,10 @@ class SocketService {
 
   onRoomUpdate(callback: (data: any) => void): void {
     this.socket?.on(SOCKET_EVENTS.ROOM_UPDATE, callback);
+  }
+
+  onCountdownStart(callback: (data: { count?: number }) => void): void {
+    this.socket?.on(SOCKET_EVENTS.COUNTDOWN_START, callback);
   }
 
   onGameStart(callback: (data: any) => void): void {
@@ -77,6 +85,10 @@ class SocketService {
 
   onRebuyRequired(callback: (data: any) => void): void {
     this.socket?.on(SOCKET_EVENTS.REBUY_REQUIRED, callback);
+  }
+
+  onGameOver(callback: (data: { winnerId: string }) => void): void {
+    this.socket?.on(SOCKET_EVENTS.GAME_OVER, callback);
   }
 }
 

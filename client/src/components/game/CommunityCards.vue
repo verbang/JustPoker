@@ -1,7 +1,21 @@
 <template>
   <div class="community-cards">
-    <div v-for="(card, index) in cards" :key="index" class="card">
-      {{ card.rank }}{{ getSuitSymbol(card.suit) }}
+    <div
+      v-for="(card, index) in cards"
+      :key="index"
+      class="card"
+      :class="getSuitClass(card.suit)"
+    >
+      <span class="card-rank">{{ card.rank }}</span>
+      <span class="card-suit">{{ getSuitSymbol(card.suit) }}</span>
+    </div>
+    <!-- Placeholder slots for undealt cards -->
+    <div
+      v-for="i in Math.max(0, 5 - cards.length)"
+      :key="'empty-' + i"
+      class="card card-empty"
+    >
+      <span class="card-placeholder">?</span>
     </div>
   </div>
 </template>
@@ -20,26 +34,64 @@ function getSuitSymbol(suit: string): string {
   };
   return symbols[suit] || '';
 }
+
+function getSuitClass(suit: string): string {
+  if (suit === 'hearts' || suit === 'diamonds') return 'suit-red';
+  return 'suit-black';
+}
 </script>
 
 <style scoped>
 .community-cards {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   justify-content: center;
 }
 
 .card {
-  width: 50px;
-  height: 70px;
+  width: 52px;
+  height: 72px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   background: #fff;
-  border: 2px solid #333;
+  border: 2px solid #555;
   border-radius: 6px;
-  font-size: 18px;
   font-weight: bold;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s;
+}
+
+.card:not(.card-empty):hover {
+  transform: scale(1.05);
+}
+
+.card-rank {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.card-suit {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.card.suit-red {
+  color: #d32f2f;
+}
+
+.card.suit-black {
+  color: #212121;
+}
+
+.card-empty {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+}
+
+.card-placeholder {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 20px;
 }
 </style>

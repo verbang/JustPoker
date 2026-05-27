@@ -5,23 +5,15 @@
       <thead>
         <tr>
           <th>玩家</th>
-          <th>初始筹码</th>
-          <th>重新买入</th>
-          <th>总投入</th>
           <th>当前筹码</th>
-          <th>盈亏</th>
+          <th>状态</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="player in players" :key="player.userId">
+        <tr v-for="player in displayPlayers" :key="player.userId">
           <td>{{ player.nickname }}</td>
-          <td>{{ player.initialChips }}</td>
-          <td>{{ player.rebuyTotal }}</td>
-          <td>{{ player.totalInvested }}</td>
           <td>{{ player.chips }}</td>
-          <td :class="{ positive: player.profit >= 0, negative: player.profit < 0 }">
-            {{ player.profit >= 0 ? '+' : '' }}{{ player.profit }}
-          </td>
+          <td>{{ getStatusText(player.displayStatus) }}</td>
         </tr>
       </tbody>
     </table>
@@ -29,9 +21,41 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue';
+
+const props = defineProps<{
   players: any[];
+  gameState?: {
+    players: { userId: string; status: string }[];
+  } | null;
 }>();
+
+const displayPlayers = computed(() => {
+  return props.players.map(p => {
+    // During game, prefer game-level status; otherwise use room-level status
+    let displayStatus = p.status;
+    if (props.gameState) {
+      const gamePlayer = props.gameState.players.find(gp => gp.userId === p.userId);
+      if (gamePlayer) {
+        displayStatus = gamePlayer.status;
+      }
+    }
+    return { ...p, displayStatus };
+  });
+});
+
+function getStatusText(status: string): string {
+  const statusMap: Record<string, string> = {
+    joined: '已加入',
+    seated: '已入座',
+    ready: '已准备',
+    playing: '游戏中',
+    folded: '已弃牌',
+    all_in: '全下',
+    out: '已出局',
+  };
+  return statusMap[status] || status;
+}
 </script>
 
 <style scoped>
@@ -66,13 +90,5 @@ th {
 
 td {
   font-size: 14px;
-}
-
-.positive {
-  color: #4caf50;
-}
-
-.negative {
-  color: #f44336;
 }
 </style>

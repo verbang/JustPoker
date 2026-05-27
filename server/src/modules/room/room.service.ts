@@ -67,6 +67,14 @@ export class RoomService {
     return this.roomManager.rebuy(roomCode, userId, amount);
   }
 
+  readyPlayer(roomCode: string, userId: string): boolean {
+    return this.roomManager.readyPlayer(roomCode, userId);
+  }
+
+  allSeatedPlayersReady(roomCode: string): boolean {
+    return this.roomManager.allSeatedPlayersReady(roomCode);
+  }
+
   getRoomManager(): RoomManager {
     return this.roomManager;
   }

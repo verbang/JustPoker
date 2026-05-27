@@ -2,7 +2,7 @@
 export type RoomStatus = 'waiting' | 'playing' | 'ended';
 
 // 玩家状态
-export type PlayerStatus = 'joined' | 'seated' | 'playing' | 'folded' | 'out';
+export type PlayerStatus = 'joined' | 'seated' | 'ready' | 'playing' | 'folded' | 'out';
 
 // 房间信息
 export interface Room {

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/index.ts",
     "build": "tsc && tsc-alias && rm -f ../shared/**/*.js ../shared/**/*.js.map ../shared/**/*.d.ts ../shared/**/*.d.ts.map",
     "start": "node dist/server/src/index.js",
     "test": "jest"
@@ -25,6 +25,7 @@
     "ts-jest": "^29.1.1",
     "ts-node-dev": "^2.0.0",
     "tsc-alias": "^1.8.17",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.2.2"
   }
 }

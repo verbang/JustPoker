@@ -2,17 +2,18 @@
   <div class="game-table">
     <div class="table-surface">
       <CommunityCards :cards="communityCards" />
-      <div class="pot">底池: {{ pot }}</div>
+      <div class="pot" v-if="pot > 0">底池: {{ pot }}</div>
     </div>
     <div class="seats">
       <PlayerSeat
-        v-for="(player, index) in players"
+        v-for="(player, displayIndex) in displayPlayers"
         :key="player.userId"
         :player="player"
         :is-me="player.userId === userId"
-        :is-current-player="index === currentPlayerIndex"
+        :is-current-player="player.seatNumber === currentSeatNumber"
         :my-cards="player.userId === userId ? myCards : []"
-        :style="getSeatStyle(index, players.length)"
+        :emojis="getPlayerEmojis(player.userId)"
+        :style="getSeatStyle(displayIndex, displayPlayers.length)"
         @tip="$emit('tip', player)"
       />
     </div>
@@ -20,27 +21,82 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import PlayerSeat from './PlayerSeat.vue';
 import CommunityCards from './CommunityCards.vue';
 
-defineProps<{
+const props = defineProps<{
   players: any[];
   communityCards: any[];
   pot: number;
   currentPlayerIndex: number;
   userId: string;
   myCards: any[];
+  activeEmojis: { id: number; userId: string; emoji: string }[];
 }>();
 
 defineEmits<{
   (e: 'tip', player: any): void;
 }>();
 
-function getSeatStyle(index: number, total: number) {
-  const angle = (360 / total) * index - 90;
-  const radius = 40;
-  const x = 50 + radius * Math.cos((angle * Math.PI) / 180);
-  const y = 50 + radius * Math.sin((angle * Math.PI) / 180);
+function getPlayerEmojis(userId: string) {
+  return props.activeEmojis.filter(e => e.userId === userId);
+}
+
+/**
+ * The seat number of the current acting player from the game state.
+ * We need to map currentPlayerIndex (array index in sorted seat order)
+ * back to seat number.
+ */
+const currentSeatNumber = computed(() => {
+  if (props.currentPlayerIndex < 0 || props.currentPlayerIndex >= props.players.length) return -1;
+  return props.players[props.currentPlayerIndex]?.seatNumber ?? -1;
+});
+
+/**
+ * Reorder players so "me" is always first (display position = bottom).
+ * Other players follow in clockwise seat-number order from my left.
+ */
+const displayPlayers = computed(() => {
+  const myIndex = props.players.findIndex(p => p.userId === props.userId);
+  if (myIndex === -1) return props.players;
+
+  const total = props.players.length;
+  const result = [];
+  for (let i = 0; i < total; i++) {
+    result.push(props.players[(myIndex + i) % total]);
+  }
+  return result;
+});
+
+/**
+ * Position seats in a first-person oval layout.
+ * Index 0 (me) = bottom center (6 o'clock).
+ * Others spread clockwise: left-bottom, left, left-top, top, right-top, right, right-bottom.
+ */
+function getSeatStyle(displayIndex: number, total: number) {
+  if (total <= 1) {
+    return { left: '50%', top: '85%', transform: 'translate(-50%, -50%)' };
+  }
+
+  // Me (index 0) is always at bottom center
+  if (displayIndex === 0) {
+    return { left: '50%', top: '88%', transform: 'translate(-50%, -50%)' };
+  }
+
+  // Other players spread along the top arc (from left to right)
+  const otherCount = total - 1;
+  // Spread from -70° to +70° around the top (12 o'clock = -90° in standard math)
+  const spreadAngle = 150; // degrees total spread
+  const startAngle = -90 - spreadAngle / 2; // left side
+  const stepAngle = spreadAngle / (otherCount - 1 || 1);
+  const angle = (startAngle + stepAngle * (displayIndex - 1)) * (Math.PI / 180);
+
+  const radiusX = 44;
+  const radiusY = 40;
+  const x = 50 + radiusX * Math.cos(angle);
+  const y = 50 + radiusY * Math.sin(angle);
+
   return {
     left: `${x}%`,
     top: `${y}%`,
@@ -54,17 +110,17 @@ function getSeatStyle(index: number, total: number) {
   position: relative;
   width: 100%;
   max-width: 800px;
-  height: 500px;
+  height: 480px;
   margin: 0 auto;
 }
 
 .table-surface {
   position: absolute;
-  top: 50%;
+  top: 45%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 60%;
-  height: 40%;
+  width: 55%;
+  height: 38%;
   background: #1b5e20;
   border-radius: 50%;
   border: 8px solid #4e342e;
@@ -72,7 +128,7 @@ function getSeatStyle(index: number, total: number) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .pot {
