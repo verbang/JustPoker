@@ -36,6 +36,7 @@ import { useUserStore } from '../stores/user';
 import { useRoomStore } from '../stores/room';
 import { useGameStore } from '../stores/game';
 import { socketService } from '../services/socket';
+import { soundManager } from '../utils/sounds';
 import GameTable from '../components/game/GameTable.vue';
 import ActionPanel from '../components/game/ActionPanel.vue';
 import EmojiPanel from '../components/game/EmojiPanel.vue';
@@ -64,12 +65,28 @@ onMounted(() => {
   socketService.connect();
   socketService.joinRoom(roomCode.value, userId.value);
 
+  socketService.onRoomUpdate((data) => {
+    roomStore.setPlayers(data.players);
+  });
+
   socketService.onGameUpdate((data) => {
     gameStore.updateGameState(data);
   });
 
-  socketService.onRoomUpdate((data) => {
-    roomStore.setPlayers(data.players);
+  socketService.onPlayerJoined(() => {
+    soundManager.playJoin();
+  });
+
+  socketService.onPlayerLeft(() => {
+    soundManager.playLeave();
+  });
+
+  socketService.onNewEmoji(() => {
+    soundManager.playEmoji();
+  });
+
+  socketService.onGameStart(() => {
+    soundManager.playDeal();
   });
 });
 
