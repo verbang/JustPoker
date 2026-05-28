@@ -1,10 +1,12 @@
 <template>
   <div class="room">
-    <h2>房间: {{ roomCode }}</h2>
+    <header class="room-header">
+      <h2>房间: {{ roomCode }}</h2>
+    </header>
 
     <!-- Seat Selection (when player hasn't selected a seat) -->
     <SeatSelection
-      v-if="!mySeatNumber"
+      v-if="mySeatNumber === null"
       :players="players"
       :user-id="userId"
       :max-seats="10"
@@ -12,66 +14,73 @@
     />
 
     <!-- Game Table (when player has selected a seat) -->
-    <template v-else>
-      <GameTable
-        :players="seatedPlayers"
-        :community-cards="communityCards"
-        :pot="pot"
-        :current-player-index="currentPlayerIndex"
-        :user-id="userId"
-        :my-cards="myCards"
-        :active-emojis="activeEmojis"
-        @tip="handleTip"
-      />
+    <div v-else class="game-layout">
+      <main class="table-zone">
+        <GameTable
+          :players="seatedPlayers"
+          :community-cards="communityCards"
+          :pot="pot"
+          :current-player-index="currentPlayerIndex"
+          :user-id="userId"
+          :my-cards="myCards"
+          :active-emojis="activeEmojis"
+          @tip="handleTip"
+        />
 
-      <!-- Ready Button (visible when I am 'seated') -->
-      <button
-        v-if="myStatus === 'seated'"
-        class="ready-btn"
-        @click="handleReady"
-      >
-        准备
-      </button>
+        <div class="table-status">
+          <!-- Ready Button (visible when I am 'seated') -->
+          <button
+            v-if="myStatus === 'seated'"
+            class="ready-btn"
+            @click="handleReady"
+          >
+            准备
+          </button>
 
-      <!-- Waiting indicator (when I am 'ready' and game hasn't started) -->
-      <div v-if="myStatus === 'ready' && !gameStore.gameState" class="waiting-indicator">
-        <span class="waiting-dot"></span>
-        等待其他玩家准备...
-      </div>
+          <!-- Waiting indicator (when I am 'ready' and game hasn't started) -->
+          <div v-if="myStatus === 'ready' && !gameStore.gameState" class="waiting-indicator">
+            <span class="waiting-dot"></span>
+            等待其他玩家准备...
+          </div>
 
-      <HandDisplay
-        v-if="gameStore.gameState"
-        :hole-cards="myCards"
-        :community-cards="communityCards"
-      />
-      <ActionPanel
-        v-if="isMyTurn"
-        :is-my-turn="isMyTurn"
-        :current-bet="currentBet"
-        :my-bet="myBet"
-        :min-raise="minRaise"
-        :max-chips="maxChips"
-        @fold="handleFold"
-        @check="handleCheck"
-        @call="handleCall"
-        @raise="handleRaise"
-        @all-in="handleAllIn"
-      />
-    </template>
+          <HandDisplay
+            v-if="gameStore.gameState"
+            :hole-cards="myCards"
+            :community-cards="communityCards"
+          />
+        </div>
+      </main>
+
+      <aside class="control-zone">
+        <ActionPanel
+          v-if="isMyTurn"
+          :is-my-turn="isMyTurn"
+          :current-bet="currentBet"
+          :my-bet="myBet"
+          :min-raise="minRaise"
+          :max-chips="maxChips"
+          @fold="handleFold"
+          @check="handleCheck"
+          @call="handleCall"
+          @raise="handleRaise"
+          @all-in="handleAllIn"
+        />
+        <EmojiPanel
+          :is-cooldown="isCooldown"
+          @send="handleEmoji"
+        />
+        <Scoreboard :players="players" :game-state="gameStore.gameState" />
+      </aside>
+    </div>
 
     <!-- Countdown Overlay -->
     <Countdown :count="countdownValue" />
 
-    <EmojiPanel
-      :is-cooldown="isCooldown"
-      @send="handleEmoji"
-    />
-    <Scoreboard :players="players" :game-state="gameStore.gameState" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useUserStore } from '../stores/user';
 import { useRoomStore } from '../stores/room';
@@ -96,7 +105,7 @@ const userId = computed(() => userStore.userId || '');
 const players = computed(() => roomStore.players);
 const mySeatNumber = computed(() => {
   const me = players.value.find(p => p.userId === userId.value);
-  return me?.seatNumber || null;
+  return me?.seatNumber ?? null;
 });
 const myStatus = computed(() => {
   const me = players.value.find(p => p.userId === userId.value);
@@ -176,6 +185,10 @@ onMounted(() => {
   });
 });
 
+onUnmounted(() => {
+  socketService.offAll();
+});
+
 function handleSelectSeat(seatNumber: number) {
   socketService.selectSeat(roomCode.value, seatNumber);
 }
@@ -232,32 +245,86 @@ function handleTip(player: any) {
 
 <style scoped>
 .room {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: #0d47a1;
-  padding: 20px;
+  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.room-header {
+  width: 100%;
+  flex: 0 0 auto;
 }
 
 h2 {
   color: #fff;
   margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.game-layout {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 28vw);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.table-zone {
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.table-status {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.table-status > * {
+  pointer-events: auto;
+}
+
+.control-zone {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
 }
 
 .ready-btn {
-  padding: 14px 48px;
-  font-size: 18px;
+  min-height: 44px;
+  padding: 10px 34px;
+  font-size: 16px;
   font-weight: bold;
   color: #fff;
   background: linear-gradient(135deg, #4caf50, #388e3c);
   border: none;
-  border-radius: 30px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-  letter-spacing: 2px;
 }
 
 .ready-btn:hover {
@@ -273,11 +340,12 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 24px;
+  padding: 9px 16px;
   background: rgba(0, 0, 0, 0.5);
-  border-radius: 20px;
+  border-radius: 8px;
   color: #aaa;
-  font-size: 14px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .waiting-dot {
@@ -291,5 +359,67 @@ h2 {
 @keyframes pulse {
   0%, 100% { opacity: 0.4; transform: scale(0.8); }
   50% { opacity: 1; transform: scale(1.2); }
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .room {
+    gap: 6px;
+  }
+
+  .room-header {
+    position: absolute;
+    top: max(6px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    z-index: 5;
+    width: auto;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  h2 {
+    font-size: 13px;
+  }
+
+  .game-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(184px, 27vw);
+    gap: 6px;
+    height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+  }
+
+  .control-zone {
+    gap: 6px;
+  }
+
+  .table-status {
+    bottom: 4px;
+  }
+
+  .ready-btn {
+    min-height: 38px;
+    padding: 8px 24px;
+    font-size: 14px;
+  }
+}
+
+@media (orientation: portrait) {
+  .room {
+    overflow: auto;
+  }
+
+  .game-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .table-zone {
+    min-height: 420px;
+  }
+
+  .table-status {
+    position: static;
+    margin-top: -38px;
+    transform: none;
+  }
 }
 </style>

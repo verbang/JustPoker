@@ -177,4 +177,48 @@ function selectSeat(seatNumber: number) {
   color: rgba(255, 255, 255, 0.5);
   margin-top: 2px;
 }
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .seat-selection {
+    max-width: none;
+    height: 100%;
+    padding-top: 26px;
+  }
+
+  .seat-selection h3 {
+    margin-bottom: 4px;
+    font-size: 14px;
+  }
+
+  .table-container {
+    height: calc(100dvh - 58px);
+    min-height: 250px;
+  }
+
+  .table-surface {
+    width: 48%;
+    height: 42%;
+    border-width: 5px;
+  }
+
+  .table-label {
+    font-size: 12px;
+  }
+
+  .seat-node {
+    width: 58px;
+    height: 44px;
+    border-radius: 6px;
+  }
+
+  .seat-number {
+    font-size: 13px;
+  }
+
+  .seat-player,
+  .seat-empty {
+    max-width: 48px;
+    font-size: 9px;
+  }
+}
 </style>

@@ -96,7 +96,40 @@ class SocketService {
       });
 
       socket.on('disconnect', () => {
-        logger.info(`Client disconnected: ${socket.id}`);
+        const userId = socket.data.userId as string;
+        const roomCode = socket.data.roomCode as string;
+        logger.info(`Client disconnected: ${socket.id}, userId: ${userId}`);
+
+        if (roomCode && userId) {
+          // Handle player disconnect during active game
+          const gameState = this.gameStates.get(roomCode);
+          if (gameState) {
+            const player = gameState.players.find(p => p.userId === userId);
+            if (player && player.status === 'playing') {
+              // Auto-fold the disconnected player
+              try {
+                const engine = this.gameEngines.get(roomCode);
+                if (engine) {
+                  const newState = engine.playerAction(gameState, userId, 'fold');
+                  this.gameStates.set(roomCode, newState);
+                  this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, newState);
+
+                  if (newState.status === 'finished') {
+                    this.handleGameFinished(roomCode, newState);
+                  }
+                }
+              } catch {
+                // Player's turn might have already passed, that's ok
+              }
+            }
+          }
+
+          // Remove player from room
+          roomService.leaveRoom(roomCode, userId);
+          const players = roomService.getRoomPlayers(roomCode);
+          this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
+          this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId });
+        }
       });
     });
 
@@ -170,15 +203,6 @@ class SocketService {
     // Create and start game
     const engine = new GameEngine();
     const gameState = engine.startGame(roomCode, gamePlayers, room.smallBlind, room.bigBlind);
-
-    // Deduct blinds from player chips
-    gameState.players.forEach(p => {
-      if (p.isSmallBlind) {
-        p.chips -= room.smallBlind;
-      } else if (p.isBigBlind) {
-        p.chips -= room.bigBlind;
-      }
-    });
 
     this.gameEngines.set(roomCode, engine);
     this.gameStates.set(roomCode, gameState);

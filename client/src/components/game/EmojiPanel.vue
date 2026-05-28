@@ -67,4 +67,26 @@ const emojis = EMOJIS;
   font-size: 12px;
   margin-left: 8px;
 }
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .emoji-panel {
+    gap: 4px;
+    padding: 6px;
+    border-radius: 6px;
+  }
+
+  .emoji-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 5px;
+    font-size: 17px;
+  }
+
+  .cooldown {
+    width: 100%;
+    margin-left: 0;
+    font-size: 10px;
+    text-align: center;
+  }
+}
 </style>

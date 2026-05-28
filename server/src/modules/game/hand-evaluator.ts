@@ -96,7 +96,40 @@ export class HandEvaluator {
     const rankDiff = HAND_RANK_ORDER[result1.rank] - HAND_RANK_ORDER[result2.rank];
     if (rankDiff !== 0) return rankDiff;
 
-    // Compare by card values if same rank
+    // Same rank — use rank-specific comparison
+    switch (result1.rank) {
+      case 'two_pair':
+        return this.compareTwoPair(hand1, hand2);
+      case 'full_house':
+        return this.compareFullHouse(hand1, hand2);
+      default:
+        return this.compareHighCards(hand1, hand2);
+    }
+  }
+
+  private static compareTwoPair(hand1: Card[], hand2: Card[]): number {
+    const pairs1 = this.getPairRanks(hand1).sort((a, b) => b - a);
+    const pairs2 = this.getPairRanks(hand2).sort((a, b) => b - a);
+
+    // Compare higher pair
+    if (pairs1[1] !== pairs2[1]) return pairs1[1] - pairs2[1];
+    // Compare lower pair
+    if (pairs1[0] !== pairs2[0]) return pairs1[0] - pairs2[0];
+    // Compare kicker
+    return this.getKickerValue(hand1) - this.getKickerValue(hand2);
+  }
+
+  private static compareFullHouse(hand1: Card[], hand2: Card[]): number {
+    const trips1 = this.getThreeOfAKindRank(hand1);
+    const trips2 = this.getThreeOfAKindRank(hand2);
+    if (trips1 !== trips2) return trips1 - trips2;
+
+    const pair1 = this.getPairRanks(hand1)[0] || 0;
+    const pair2 = this.getPairRanks(hand2)[0] || 0;
+    return pair1 - pair2;
+  }
+
+  private static compareHighCards(hand1: Card[], hand2: Card[]): number {
     const sorted1 = this.sortCards(hand1);
     const sorted2 = this.sortCards(hand2);
 
@@ -104,8 +137,26 @@ export class HandEvaluator {
       const diff = RANK_VALUES[sorted1[i].rank] - RANK_VALUES[sorted2[i].rank];
       if (diff !== 0) return diff;
     }
-
     return 0;
+  }
+
+  private static getPairRanks(cards: Card[]): number[] {
+    const groups = this.groupByRank(cards);
+    return groups
+      .filter(g => g.length === 2)
+      .map(g => RANK_VALUES[g[0].rank]);
+  }
+
+  private static getThreeOfAKindRank(cards: Card[]): number {
+    const groups = this.groupByRank(cards);
+    const trips = groups.find(g => g.length === 3);
+    return trips ? RANK_VALUES[trips[0].rank] : 0;
+  }
+
+  private static getKickerValue(cards: Card[]): number {
+    const groups = this.groupByRank(cards);
+    const kicker = groups.find(g => g.length === 1);
+    return kicker ? RANK_VALUES[kicker[0].rank] : 0;
   }
 
   private static sortCards(cards: Card[]): Card[] {

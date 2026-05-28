@@ -94,4 +94,29 @@ function getSuitClass(suit: string): string {
   color: rgba(255, 255, 255, 0.3);
   font-size: 20px;
 }
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .community-cards {
+    gap: 4px;
+  }
+
+  .card {
+    width: 34px;
+    height: 48px;
+    border-width: 1px;
+    border-radius: 4px;
+  }
+
+  .card-rank {
+    font-size: 13px;
+  }
+
+  .card-suit {
+    font-size: 12px;
+  }
+
+  .card-placeholder {
+    font-size: 14px;
+  }
+}
 </style>

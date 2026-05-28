@@ -45,12 +45,14 @@ export class GameEngine {
       isBigBlind: i === bigBlindIndex,
     }));
 
-    // Post blinds - set bet/totalBet without deducting from chips
+    // Post blinds - deduct from chips
     gamePlayers[smallBlindIndex].bet = smallBlind;
     gamePlayers[smallBlindIndex].totalBet = smallBlind;
+    gamePlayers[smallBlindIndex].chips -= smallBlind;
 
     gamePlayers[bigBlindIndex].bet = bigBlind;
     gamePlayers[bigBlindIndex].totalBet = bigBlind;
+    gamePlayers[bigBlindIndex].chips -= bigBlind;
 
     // Deal 2 hole cards to each player
     for (const player of gamePlayers) {
@@ -119,6 +121,9 @@ export class GameEngine {
           throw new Error('Raise amount must be greater than current bet');
         }
         const raiseAmount = amount - player.bet;
+        if (raiseAmount > player.chips) {
+          throw new Error('Not enough chips to raise');
+        }
         player.chips -= raiseAmount;
         player.bet = amount;
         player.totalBet += raiseAmount;
@@ -132,7 +137,7 @@ export class GameEngine {
 
       case 'all_in': {
         const allInAmount = player.chips;
-        player.bet = allInAmount;
+        player.bet += allInAmount;
         player.totalBet += allInAmount;
         player.chips = 0;
         player.status = 'all_in';

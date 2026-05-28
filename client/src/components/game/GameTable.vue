@@ -109,8 +109,9 @@ function getSeatStyle(displayIndex: number, total: number) {
 .game-table {
   position: relative;
   width: 100%;
-  max-width: 800px;
-  height: 480px;
+  max-width: min(900px, 100%);
+  height: min(560px, 100%);
+  min-height: 360px;
   margin: 0 auto;
 }
 
@@ -143,5 +144,32 @@ function getSeatStyle(displayIndex: number, total: number) {
   left: 0;
   width: 100%;
   height: 100%;
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .game-table {
+    height: 100%;
+    min-height: 0;
+    max-width: none;
+  }
+
+  .table-surface {
+    top: 48%;
+    width: 54%;
+    height: 42%;
+    border-width: 5px;
+    gap: 5px;
+  }
+
+  .pot {
+    font-size: 13px;
+  }
+}
+
+@media (max-height: 430px) and (orientation: landscape) {
+  .table-surface {
+    width: 50%;
+    height: 36%;
+  }
 }
 </style>

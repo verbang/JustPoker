@@ -29,7 +29,7 @@
       :max="maxChips"
       class="raise-slider"
     />
-    <button class="action-btn all-in" @click="$emit('allIn')" :disabled="!isMyTurn">
+    <button class="action-btn all-in" @click="$emit('all-in')" :disabled="!isMyTurn">
       全下
     </button>
   </div>
@@ -51,7 +51,7 @@ defineEmits<{
   (e: 'check'): void;
   (e: 'call'): void;
   (e: 'raise', amount: number): void;
-  (e: 'allIn'): void;
+  (e: 'all-in'): void;
 }>();
 
 const raiseAmount = ref(props.currentBet + props.minRaise);
@@ -61,9 +61,9 @@ const callAmount = computed(() => props.currentBet - props.myBet);
 const raiseMin = computed(() => props.currentBet + props.minRaise);
 
 watch(
-  () => props.currentBet,
-  (newBet) => {
-    raiseAmount.value = newBet + props.minRaise;
+  () => [props.currentBet, props.minRaise],
+  () => {
+    raiseAmount.value = props.currentBet + props.minRaise;
   }
 );
 </script>
@@ -143,5 +143,27 @@ watch(
 .raise-slider {
   width: 120px;
   cursor: pointer;
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .action-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 6px;
+  }
+
+  .action-btn {
+    min-height: 38px;
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  .raise-slider {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 30px;
+  }
 }
 </style>

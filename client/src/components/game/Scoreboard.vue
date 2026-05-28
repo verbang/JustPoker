@@ -64,6 +64,8 @@ function getStatusText(status: string): string {
   border-radius: 8px;
   padding: 16px;
   color: #fff;
+  min-height: 0;
+  overflow: auto;
 }
 
 .scoreboard h3 {
@@ -90,5 +92,31 @@ th {
 
 td {
   font-size: 14px;
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .scoreboard {
+    flex: 1;
+    padding: 8px;
+    border-radius: 6px;
+  }
+
+  .scoreboard h3 {
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+
+  th,
+  td {
+    padding: 5px 4px;
+  }
+
+  th {
+    font-size: 10px;
+  }
+
+  td {
+    font-size: 11px;
+  }
 }
 </style>

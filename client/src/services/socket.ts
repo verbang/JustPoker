@@ -90,6 +90,18 @@ class SocketService {
   onGameOver(callback: (data: { winnerId: string }) => void): void {
     this.socket?.on(SOCKET_EVENTS.GAME_OVER, callback);
   }
+
+  off(event: string, callback?: (...args: any[]) => void): void {
+    if (callback) {
+      this.socket?.off(event, callback);
+    } else {
+      this.socket?.off(event);
+    }
+  }
+
+  offAll(): void {
+    this.socket?.removeAllListeners();
+  }
 }
 
 export const socketService = new SocketService();

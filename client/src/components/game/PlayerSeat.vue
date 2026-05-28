@@ -104,6 +104,7 @@ function handleTip() {
   background: rgba(0, 0, 0, 0.55);
   transition: all 0.3s ease;
   min-width: 72px;
+  max-width: 96px;
 }
 
 .player-seat.is-me {
@@ -261,5 +262,77 @@ function handleTip() {
 .card-back {
   background: linear-gradient(135deg, #1565c0, #0d47a1);
   border-color: #0d47a1;
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .player-seat {
+    gap: 2px;
+    min-width: 58px;
+    max-width: 76px;
+    padding: 4px 6px;
+    border-radius: 7px;
+  }
+
+  .player-seat.is-me,
+  .player-seat.is-current {
+    border-width: 1px;
+  }
+
+  .position-badges {
+    gap: 2px;
+    margin-bottom: 0;
+  }
+
+  .badge {
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+
+  .avatar {
+    gap: 1px;
+  }
+
+  .avatar-circle {
+    width: 26px;
+    height: 26px;
+    border-width: 1px;
+    font-size: 12px;
+  }
+
+  .nickname {
+    max-width: 64px;
+    font-size: 10px;
+  }
+
+  .chips {
+    font-size: 10px;
+  }
+
+  .cards {
+    gap: 2px;
+    margin-top: 1px;
+  }
+
+  .card {
+    width: 22px;
+    height: 31px;
+    border-radius: 3px;
+  }
+
+  .card-rank {
+    font-size: 10px;
+  }
+
+  .card-suit {
+    font-size: 9px;
+  }
+
+  .emoji-container {
+    top: -28px;
+  }
+
+  .floating-emoji {
+    font-size: 22px;
+  }
 }
 </style>
