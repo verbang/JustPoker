@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL || ''}/api`,
+  baseURL: 'https://justpoker-api.onrender.com/api',
   timeout: 10000,
 });
 

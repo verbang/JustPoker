@@ -5,7 +5,7 @@ class SocketService {
   private socket: Socket | null = null;
 
   connect(): void {
-    const backendUrl = import.meta.env.VITE_API_URL || window.location.origin;
+    const backendUrl = 'https://justpoker-api.onrender.com';
     this.socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
     });
