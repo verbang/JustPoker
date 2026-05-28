@@ -5,7 +5,8 @@ class SocketService {
   private socket: Socket | null = null;
 
   connect(): void {
-    this.socket = io(window.location.origin, {
+    const backendUrl = import.meta.env.VITE_API_URL || window.location.origin;
+    this.socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
     });
 
