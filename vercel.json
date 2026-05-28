@@ -1,7 +1,4 @@
 {
-  "buildCommand": "cd client && npm run build",
-  "outputDirectory": "client/dist",
-  "framework": "vite",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://justpoker-api.onrender.com/api/$1" },
     { "source": "/socket.io/(.*)", "destination": "https://justpoker-api.onrender.com/socket.io/$1" }
