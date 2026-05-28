@@ -26,12 +26,14 @@
       <span v-if="player.isBigBlind" class="badge bb">BB</span>
     </div>
 
-    <div class="avatar">
-      <div class="avatar-circle" :class="{ 'active': isCurrentPlayer }">
-        {{ player.nickname.charAt(0) }}
-      </div>
+    <!-- Winner crown -->
+    <div v-if="isWinner" class="crown-container">
+      <span class="crown">&#x1F451;</span>
+    </div>
+
+    <div class="player-info">
       <span class="nickname" @click="handleTip">{{ player.nickname }}</span>
-      <span class="chips">{{ player.chips }}</span>
+      <span class="chips">&#x1F4B0; {{ player.chips }}</span>
     </div>
 
     <!-- My cards (face up) -->
@@ -67,6 +69,7 @@ const props = defineProps<{
   };
   isMe: boolean;
   isCurrentPlayer: boolean;
+  isWinner?: boolean;
   myCards?: any[];
   emojis?: { id: number; userId: string; emoji: string }[];
 }>();
@@ -103,8 +106,8 @@ function handleTip() {
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.55);
   transition: all 0.3s ease;
-  min-width: 72px;
-  max-width: 96px;
+  min-width: 80px;
+  max-width: 110px;
 }
 
 .player-seat.is-me {
@@ -183,43 +186,45 @@ function handleTip() {
 .emoji-float-leave-active { transition: opacity 0.3s; }
 .emoji-float-leave-to { opacity: 0; }
 
-/* Avatar */
-.avatar {
+/* Winner crown */
+.crown-container {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: crown-bounce 1s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.crown {
+  font-size: 28px;
+  filter: drop-shadow(0 2px 6px rgba(255, 215, 0, 0.8));
+}
+
+@keyframes crown-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-6px); }
+}
+
+/* Player info */
+.player-info {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
 }
 
-.avatar-circle {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #37474f, #263238);
-  border: 2px solid #546e7a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 16px;
-  font-weight: bold;
-  transition: all 0.3s;
-}
-
-.avatar-circle.active {
-  border-color: #ffeb3b;
-  box-shadow: 0 0 8px rgba(255, 235, 59, 0.6);
-}
-
 .nickname {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: bold;
   color: #fff;
   cursor: pointer;
-  max-width: 80px;
+  max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 }
 
 .nickname:hover {
@@ -227,7 +232,7 @@ function handleTip() {
 }
 
 .chips {
-  font-size: 11px;
+  font-size: 13px;
   color: #ffd700;
   font-weight: bold;
 }
@@ -267,8 +272,8 @@ function handleTip() {
 @media (orientation: landscape) and (max-width: 900px) {
   .player-seat {
     gap: 2px;
-    min-width: 58px;
-    max-width: 76px;
+    min-width: 64px;
+    max-width: 90px;
     padding: 4px 6px;
     border-radius: 7px;
   }
@@ -288,24 +293,17 @@ function handleTip() {
     padding: 1px 3px;
   }
 
-  .avatar {
+  .player-info {
     gap: 1px;
   }
 
-  .avatar-circle {
-    width: 26px;
-    height: 26px;
-    border-width: 1px;
-    font-size: 12px;
-  }
-
   .nickname {
-    max-width: 64px;
-    font-size: 10px;
+    max-width: 80px;
+    font-size: 13px;
   }
 
   .chips {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .cards {
@@ -332,6 +330,14 @@ function handleTip() {
   }
 
   .floating-emoji {
+    font-size: 22px;
+  }
+
+  .crown-container {
+    top: -22px;
+  }
+
+  .crown {
     font-size: 22px;
   }
 }

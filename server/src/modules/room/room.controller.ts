@@ -7,15 +7,19 @@ const router = Router();
 // Create room
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { nickname, initialChips }: CreateRoomRequest = req.body;
+    const { nickname, initialChips, password }: CreateRoomRequest = req.body;
 
     if (!nickname || !initialChips) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    if (password && (!/^\d{4}$/.test(password))) {
+      return res.status(400).json({ error: 'Password must be 4 digits' });
+    }
+
     // Generate a simple userId for now
     const userId = `user_${Date.now()}`;
-    const room = await roomService.createRoom(userId, { nickname, initialChips });
+    const room = await roomService.createRoom(userId, { nickname, initialChips, password });
 
     res.json({
       roomCode: room.roomCode,
@@ -31,16 +35,16 @@ router.post('/', async (req: Request, res: Response) => {
 router.post('/:roomCode/join', async (req: Request, res: Response) => {
   try {
     const { roomCode } = req.params;
-    const { nickname, chips }: JoinRoomRequest = req.body;
+    const { nickname, chips, password }: JoinRoomRequest = req.body;
 
     if (!nickname || !chips) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const player = await roomService.joinRoom({ roomCode, nickname, chips });
+    const player = await roomService.joinRoom({ roomCode, nickname, chips, password });
 
     if (!player) {
-      return res.status(404).json({ error: 'Room not found or nickname exists' });
+      return res.status(404).json({ error: 'Room not found, wrong password, or nickname exists' });
     }
 
     res.json({
@@ -65,8 +69,11 @@ router.get('/:roomCode', (req: Request, res: Response) => {
 
     const players = roomService.getRoomPlayers(roomCode);
 
+    // Don't expose password to client
+    const { password, ...roomWithoutPassword } = room as any;
+
     res.json({
-      room,
+      room: roomWithoutPassword,
       players,
     });
   } catch (error) {

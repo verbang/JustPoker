@@ -11,6 +11,7 @@
         :player="player"
         :is-me="player.userId === userId"
         :is-current-player="player.seatNumber === currentSeatNumber"
+        :is-winner="player.userId === winnerId"
         :my-cards="player.userId === userId ? myCards : []"
         :emojis="getPlayerEmojis(player.userId)"
         :style="getSeatStyle(displayIndex, displayPlayers.length)"
@@ -32,6 +33,7 @@ const props = defineProps<{
   currentPlayerIndex: number;
   userId: string;
   myCards: any[];
+  winnerId?: string;
   activeEmojis: { id: number; userId: string; emoji: string }[];
 }>();
 

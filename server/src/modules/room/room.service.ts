@@ -11,7 +11,7 @@ export class RoomService {
   }
 
   async createRoom(hostId: string, request: CreateRoomRequest): Promise<Room> {
-    const room = this.roomManager.createRoom(hostId, request.nickname, request.initialChips);
+    const room = this.roomManager.createRoom(hostId, request.nickname, request.initialChips, request.password);
 
     // Save to database if available
     await database.insert('rooms', {
@@ -33,7 +33,8 @@ export class RoomService {
       request.roomCode,
       request.nickname, // Using nickname as userId for simplicity
       request.nickname,
-      request.chips
+      request.chips,
+      request.password
     );
 
     if (player) {

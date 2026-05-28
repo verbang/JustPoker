@@ -6,7 +6,7 @@ export class RoomManager {
   private rooms: Map<string, Room> = new Map();
   private roomPlayers: Map<string, Map<string, RoomPlayer>> = new Map();
 
-  createRoom(hostId: string, hostNickname: string, initialChips: number): Room {
+  createRoom(hostId: string, hostNickname: string, initialChips: number, password?: string): Room {
     const roomCode = this.generateRoomCode();
     const room: Room = {
       id: uuidv4(),
@@ -16,23 +16,39 @@ export class RoomManager {
       smallBlind: 5,
       bigBlind: 10,
       initialChips,
+      password: password || undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
     this.rooms.set(roomCode, room);
-    this.roomPlayers.set(roomCode, new Map());
+    const players = new Map<string, RoomPlayer>();
+    this.roomPlayers.set(roomCode, players);
 
-    // Add host as first player and auto-seat at position 1
-    this.joinRoom(roomCode, hostId, hostNickname, initialChips);
-    this.selectSeat(roomCode, hostId, 1);
+    // Add host as first player, directly seated at position 1
+    const hostPlayer: RoomPlayer = {
+      id: uuidv4(),
+      roomId: room.id,
+      userId: hostId,
+      nickname: hostNickname,
+      seatNumber: 1,
+      chips: initialChips,
+      status: 'seated',
+      joinedAt: new Date(),
+    };
+    players.set(hostId, hostPlayer);
 
     return room;
   }
 
-  joinRoom(roomCode: string, userId: string, nickname: string, chips: number): RoomPlayer | null {
+  joinRoom(roomCode: string, userId: string, nickname: string, chips: number, password?: string): RoomPlayer | null {
     const room = this.rooms.get(roomCode);
     if (!room) return null;
+
+    // Verify password if room has one
+    if (room.password && room.password !== password) {
+      return null;
+    }
 
     const players = this.roomPlayers.get(roomCode)!;
 

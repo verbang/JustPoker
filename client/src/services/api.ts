@@ -35,11 +35,11 @@ export interface RoomInfo {
 }
 
 export const roomApi = {
-  createRoom: (nickname: string, initialChips: number) =>
-    api.post<CreateRoomResponse>('/rooms', { nickname, initialChips }),
+  createRoom: (nickname: string, initialChips: number, password?: string) =>
+    api.post<CreateRoomResponse>('/rooms', { nickname, initialChips, password }),
 
-  joinRoom: (roomCode: string, nickname: string, chips: number) =>
-    api.post<JoinRoomResponse>(`/rooms/${roomCode}/join`, { nickname, chips }),
+  joinRoom: (roomCode: string, nickname: string, chips: number, password?: string) =>
+    api.post<JoinRoomResponse>(`/rooms/${roomCode}/join`, { nickname, chips, password }),
 
   getRoomInfo: (roomCode: string) =>
     api.get<RoomInfo>(`/rooms/${roomCode}`),

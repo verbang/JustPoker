@@ -23,6 +23,7 @@
           :current-player-index="currentPlayerIndex"
           :user-id="userId"
           :my-cards="myCards"
+          :winner-id="winnerId"
           :active-emojis="activeEmojis"
           @tip="handleTip"
         />
@@ -111,11 +112,22 @@ const myStatus = computed(() => {
   const me = players.value.find(p => p.userId === userId.value);
   return me?.status || null;
 });
-const seatedPlayers = computed(() =>
-  players.value
+const seatedPlayers = computed(() => {
+  const roomSeated = players.value
     .filter(p => p.seatNumber !== null)
-    .sort((a, b) => (a.seatNumber || 0) - (b.seatNumber || 0))
-);
+    .sort((a, b) => (a.seatNumber || 0) - (b.seatNumber || 0));
+
+  // During gameplay, merge game state data (chips, status) into room players
+  if (gameStore.gameState) {
+    return roomSeated.map(p => {
+      const gp = gameStore.gameState!.players.find(gp => gp.userId === p.userId);
+      return gp ? { ...p, chips: gp.chips, status: gp.status } : p;
+    });
+  }
+  return roomSeated;
+});
+
+const winnerId = computed(() => gameStore.gameState?.winnerId);
 const communityCards = computed(() => gameStore.gameState?.communityCards || []);
 const pot = computed(() => gameStore.gameState?.pot || 0);
 const currentPlayerIndex = computed(() => gameStore.gameState?.currentPlayerIndex || 0);
@@ -181,7 +193,8 @@ onMounted(() => {
   });
 
   socketService.onGameOver(() => {
-    gameStore.clearGame();
+    // Keep game state so winner crown remains visible
+    // Game state will be cleared when next game starts
   });
 });
 

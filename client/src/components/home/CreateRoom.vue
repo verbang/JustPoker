@@ -13,6 +13,16 @@
       :options="[100, 200, 500]"
       v-model="initialChips"
     />
+    <div class="password-field">
+      <label>房间密码（可选）</label>
+      <input
+        v-model="password"
+        type="text"
+        placeholder="4位数字，留空则无密码"
+        maxlength="4"
+        @input="password = password.replace(/\D/g, '')"
+      />
+    </div>
     <button :disabled="!isNicknameValid" @click="createRoom">创建房间</button>
   </div>
 </template>
@@ -32,11 +42,12 @@ const roomStore = useRoomStore();
 
 const nickname = ref('');
 const initialChips = ref(100);
+const password = ref('');
 const isNicknameValid = ref(false);
 
 async function createRoom() {
   try {
-    const response = await roomApi.createRoom(nickname.value, initialChips.value);
+    const response = await roomApi.createRoom(nickname.value, initialChips.value, password.value || undefined);
     const { roomCode, roomId, userId } = response.data;
 
     userStore.setUser(userId, nickname.value);
@@ -48,3 +59,34 @@ async function createRoom() {
   }
 }
 </script>
+
+<style scoped>
+.password-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.password-field label {
+  font-size: 14px;
+  color: #ccc;
+}
+
+.password-field input {
+  padding: 10px 12px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+}
+
+.password-field input:focus {
+  border-color: #4caf50;
+}
+
+.password-field input::placeholder {
+  color: #777;
+}
+</style>

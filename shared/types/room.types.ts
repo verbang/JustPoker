@@ -13,6 +13,7 @@ export interface Room {
   smallBlind: number;
   bigBlind: number;
   initialChips: number;
+  password?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +34,7 @@ export interface RoomPlayer {
 export interface CreateRoomRequest {
   nickname: string;
   initialChips: number;
+  password?: string;
 }
 
 // 加入房间请求
@@ -40,6 +42,7 @@ export interface JoinRoomRequest {
   roomCode: string;
   nickname: string;
   chips: number;
+  password?: string;
 }
 
 // 选择座位请求
