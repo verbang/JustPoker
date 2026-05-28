@@ -190,6 +190,7 @@ class SocketService {
     const gamePlayers: GamePlayer[] = readyPlayers.map(p => ({
       userId: p.userId,
       nickname: p.nickname,
+      seatNumber: p.seatNumber || 0,
       chips: p.chips,
       bet: 0,
       totalBet: 0,
