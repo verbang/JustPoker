@@ -1,5 +1,5 @@
 import { HandEvaluator } from '../hand-evaluator';
-import { Card } from '@shared/types/game.types';
+import { Card } from '../../../../../shared/types/game.types';
 
 describe('HandEvaluator', () => {
   test('should identify royal flush', () => {

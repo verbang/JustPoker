@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { GameState, GamePlayer, PlayerAction, Card } from '@shared/types/game.types';
+import { GameState, GamePlayer, PlayerAction, Card } from '../../../../shared/types/game.types';
 import { Deck } from './deck';
 import { HandEvaluator } from './hand-evaluator';
 import { PotCalculator } from './pot-calculator';

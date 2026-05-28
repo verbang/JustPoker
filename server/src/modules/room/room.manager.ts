@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Room, RoomPlayer, PlayerStatus } from '@shared/types/room.types';
-import { MAX_SEATS } from '@shared/constants/game.constants';
+import { Room, RoomPlayer, PlayerStatus } from '../../../../shared/types/room.types';
+import { MAX_SEATS } from '../../../../shared/constants/game.constants';
 
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();

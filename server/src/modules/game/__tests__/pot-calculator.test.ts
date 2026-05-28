@@ -1,5 +1,5 @@
 import { PotCalculator } from '../pot-calculator';
-import { GamePlayer } from '@shared/types/game.types';
+import { GamePlayer } from '../../../../../shared/types/game.types';
 
 describe('PotCalculator', () => {
   const createPlayer = (overrides: Partial<GamePlayer> = {}): GamePlayer => ({

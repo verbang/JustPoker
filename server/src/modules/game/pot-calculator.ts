@@ -1,4 +1,4 @@
-import { GamePlayer, SidePot } from '@shared/types/game.types';
+import { GamePlayer, SidePot } from '../../../../shared/types/game.types';
 
 export interface PotResult {
   mainPot: number;

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/index.ts",
-    "build": "tsc && tsc-alias && rm -f ../shared/**/*.js ../shared/**/*.js.map ../shared/**/*.d.ts ../shared/**/*.d.ts.map",
+    "build": "tsc && rm -f ../shared/**/*.js ../shared/**/*.js.map ../shared/**/*.d.ts ../shared/**/*.d.ts.map",
     "start": "node dist/server/src/index.js",
     "test": "jest"
   },

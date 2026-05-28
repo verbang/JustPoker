@@ -1,10 +1,10 @@
 import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
-import { SOCKET_EVENTS } from '@shared/constants/socket.constants';
+import { SOCKET_EVENTS } from '../../../shared/constants/socket.constants';
 import { roomService } from '../modules/room/room.service';
 import { GameEngine } from '../modules/game/game.engine';
-import { GameState, GamePlayer } from '@shared/types/game.types';
+import { GameState, GamePlayer } from '../../../shared/types/game.types';
 
 class SocketService {
   private io: Server | null = null;

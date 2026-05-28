@@ -1,5 +1,5 @@
 import { RoomManager } from './room.manager';
-import { Room, RoomPlayer, CreateRoomRequest, JoinRoomRequest } from '@shared/types/room.types';
+import { Room, RoomPlayer, CreateRoomRequest, JoinRoomRequest } from '../../../../shared/types/room.types';
 import { database } from '../../services/database.service';
 import { logger } from '../../utils/logger';
 

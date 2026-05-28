@@ -1,5 +1,5 @@
 import { GameEngine } from '../game.engine';
-import { GamePlayer, GameState } from '@shared/types/game.types';
+import { GamePlayer, GameState } from '../../../../../shared/types/game.types';
 
 describe('GameEngine', () => {
   let engine: GameEngine;

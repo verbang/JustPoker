@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { roomService } from './room.service';
-import { CreateRoomRequest, JoinRoomRequest } from '@shared/types/room.types';
+import { CreateRoomRequest, JoinRoomRequest } from '../../../../shared/types/room.types';
 
 const router = Router();
 
