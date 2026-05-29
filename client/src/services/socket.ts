@@ -1,11 +1,37 @@
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_EVENTS } from '../../../shared/constants/socket.constants';
+import type { GameState, PlayerAction } from '../../../shared/types/game.types';
+import type { RoomPlayer } from '../../../shared/types/room.types';
+
+interface RoomUpdatePayload {
+  players: RoomPlayer[];
+}
+
+interface UserEventPayload {
+  userId: string;
+  reconnected?: boolean;
+  reconnecting?: boolean;
+}
+
+interface EmojiPayload {
+  userId: string;
+  emoji: string;
+}
+
+interface ErrorPayload {
+  message: string;
+}
+
+interface RebuyRequiredPayload {
+  amount?: number;
+  message?: string;
+}
 
 class SocketService {
   private socket: Socket | null = null;
 
   connect(): void {
-    const backendUrl = 'https://justpoker-api.onrender.com';
+    const backendUrl = import.meta.env.VITE_WS_URL;
     this.socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
     });
@@ -40,7 +66,7 @@ class SocketService {
     this.socket?.emit(SOCKET_EVENTS.PLAYER_READY, { roomCode });
   }
 
-  playerAction(roomCode: string, action: string, amount?: number): void {
+  playerAction(roomCode: string, action: PlayerAction, amount?: number): void {
     this.socket?.emit(SOCKET_EVENTS.PLAYER_ACTION, { roomCode, action, amount });
   }
 
@@ -52,7 +78,7 @@ class SocketService {
     this.socket?.emit(SOCKET_EVENTS.REBUY, { roomCode, amount });
   }
 
-  onRoomUpdate(callback: (data: any) => void): void {
+  onRoomUpdate(callback: (data: RoomUpdatePayload) => void): void {
     this.socket?.on(SOCKET_EVENTS.ROOM_UPDATE, callback);
   }
 
@@ -60,39 +86,39 @@ class SocketService {
     this.socket?.on(SOCKET_EVENTS.COUNTDOWN_START, callback);
   }
 
-  onGameStart(callback: (data: any) => void): void {
+  onGameStart(callback: (data: { gameState: GameState }) => void): void {
     this.socket?.on(SOCKET_EVENTS.GAME_START, callback);
   }
 
-  onGameUpdate(callback: (data: any) => void): void {
+  onGameUpdate(callback: (data: GameState) => void): void {
     this.socket?.on(SOCKET_EVENTS.GAME_UPDATE, callback);
   }
 
-  onPlayerJoined(callback: (data: any) => void): void {
+  onPlayerJoined(callback: (data: UserEventPayload) => void): void {
     this.socket?.on(SOCKET_EVENTS.PLAYER_JOINED, callback);
   }
 
-  onPlayerLeft(callback: (data: any) => void): void {
+  onPlayerLeft(callback: (data: UserEventPayload) => void): void {
     this.socket?.on(SOCKET_EVENTS.PLAYER_LEFT, callback);
   }
 
-  onNewEmoji(callback: (data: any) => void): void {
+  onNewEmoji(callback: (data: EmojiPayload) => void): void {
     this.socket?.on(SOCKET_EVENTS.NEW_EMOJI, callback);
   }
 
-  onError(callback: (data: any) => void): void {
+  onError(callback: (data: ErrorPayload) => void): void {
     this.socket?.on(SOCKET_EVENTS.ERROR, callback);
   }
 
-  onRebuyRequired(callback: (data: any) => void): void {
+  onRebuyRequired(callback: (data: RebuyRequiredPayload) => void): void {
     this.socket?.on(SOCKET_EVENTS.REBUY_REQUIRED, callback);
   }
 
-  onGameOver(callback: (data: { winnerId: string }) => void): void {
+  onGameOver(callback: (data: { winnerId?: string; winnerIds: string[] }) => void): void {
     this.socket?.on(SOCKET_EVENTS.GAME_OVER, callback);
   }
 
-  off(event: string, callback?: (...args: any[]) => void): void {
+  off(event: string, callback?: (...args: unknown[]) => void): void {
     if (callback) {
       this.socket?.off(event, callback);
     } else {

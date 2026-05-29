@@ -67,38 +67,25 @@ describe('PotCalculator', () => {
   });
 
   test('should distribute winnings to single winner', () => {
-    const players = [
-      createPlayer({ userId: '1', chips: 1000 }),
-      createPlayer({ userId: '2', chips: 1000 }),
-    ];
     const pots = [{ amount: 200, eligiblePlayerIds: ['1', '2'] }];
     const winnerIds = ['1'];
-    const result = PotCalculator.distributeWinnings(players, pots, winnerIds);
+    const result = PotCalculator.distributeWinnings(pots, winnerIds);
     expect(result.get('1')).toBe(200);
     expect(result.get('2')).toBeUndefined();
   });
 
   test('should split pot between tied winners', () => {
-    const players = [
-      createPlayer({ userId: '1', chips: 1000 }),
-      createPlayer({ userId: '2', chips: 1000 }),
-    ];
     const pots = [{ amount: 200, eligiblePlayerIds: ['1', '2'] }];
     const winnerIds = ['1', '2'];
-    const result = PotCalculator.distributeWinnings(players, pots, winnerIds);
+    const result = PotCalculator.distributeWinnings(pots, winnerIds);
     expect(result.get('1')).toBe(100);
     expect(result.get('2')).toBe(100);
   });
 
   test('should handle odd chip distribution', () => {
-    const players = [
-      createPlayer({ userId: '1', chips: 1000 }),
-      createPlayer({ userId: '2', chips: 1000 }),
-      createPlayer({ userId: '3', chips: 1000 }),
-    ];
     const pots = [{ amount: 100, eligiblePlayerIds: ['1', '2', '3'] }];
     const winnerIds = ['1', '2', '3'];
-    const result = PotCalculator.distributeWinnings(players, pots, winnerIds);
+    const result = PotCalculator.distributeWinnings(pots, winnerIds);
     // 100 / 3 = 33.33, so 33 each with 1 remainder
     expect(result.get('1')).toBe(34); // First player gets extra chip
     expect(result.get('2')).toBe(33);

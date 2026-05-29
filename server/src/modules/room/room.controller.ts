@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { roomService } from './room.service';
-import { CreateRoomRequest, JoinRoomRequest } from '../../../../shared/types/room.types';
+import { CreateRoomRequest, JoinRoomRequest, Room } from '../../../../shared/types/room.types';
 
 const router = Router();
 
@@ -9,7 +10,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const { nickname, initialChips, password }: CreateRoomRequest = req.body;
 
-    if (!nickname || !initialChips) {
+    if (!nickname || !Number.isInteger(initialChips) || initialChips <= 0) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -17,9 +18,12 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Password must be 4 digits' });
     }
 
-    // Generate a simple userId for now
-    const userId = `user_${Date.now()}`;
+    // Generate unique userId using uuid
+    const userId = uuidv4();
     const room = await roomService.createRoom(userId, { nickname, initialChips, password });
+    if (!room) {
+      return res.status(503).json({ error: '房间已满，请稍后再试！' });
+    }
 
     res.json({
       roomCode: room.roomCode,
@@ -37,11 +41,13 @@ router.post('/:roomCode/join', async (req: Request, res: Response) => {
     const { roomCode } = req.params;
     const { nickname, chips, password }: JoinRoomRequest = req.body;
 
-    if (!nickname || !chips) {
+    if (!nickname || !Number.isInteger(chips) || chips <= 0) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const player = await roomService.joinRoom({ roomCode, nickname, chips, password });
+    // Generate unique userId for the joining player
+    const userId = uuidv4();
+    const player = await roomService.joinRoom(roomCode, userId, nickname, chips, password);
 
     if (!player) {
       return res.status(404).json({ error: 'Room not found, wrong password, or nickname exists' });
@@ -70,7 +76,17 @@ router.get('/:roomCode', (req: Request, res: Response) => {
     const players = roomService.getRoomPlayers(roomCode);
 
     // Don't expose password to client
-    const { password, ...roomWithoutPassword } = room as any;
+    const roomWithoutPassword: Omit<Room, 'password'> = {
+      id: room.id,
+      roomCode: room.roomCode,
+      hostId: room.hostId,
+      status: room.status,
+      smallBlind: room.smallBlind,
+      bigBlind: room.bigBlind,
+      initialChips: room.initialChips,
+      createdAt: room.createdAt,
+      updatedAt: room.updatedAt,
+    };
 
     res.json({
       room: roomWithoutPassword,

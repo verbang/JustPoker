@@ -217,4 +217,40 @@ describe('HandEvaluator', () => {
     ];
     expect(HandEvaluator.compareHands(hand1, hand2)).toBe(0);
   });
+
+  test('should compare pairs by pair rank before kickers', () => {
+    const pairOfTwosWithAce: Card[] = [
+      { suit: 'spades', rank: '2' },
+      { suit: 'hearts', rank: '2' },
+      { suit: 'diamonds', rank: 'A' },
+      { suit: 'clubs', rank: 'K' },
+      { suit: 'spades', rank: 'Q' },
+    ];
+    const pairOfThrees: Card[] = [
+      { suit: 'spades', rank: '3' },
+      { suit: 'hearts', rank: '3' },
+      { suit: 'diamonds', rank: 'J' },
+      { suit: 'clubs', rank: '10' },
+      { suit: 'spades', rank: '9' },
+    ];
+    expect(HandEvaluator.compareHands(pairOfTwosWithAce, pairOfThrees)).toBeLessThan(0);
+  });
+
+  test('should compare wheel straight as five high', () => {
+    const wheel: Card[] = [
+      { suit: 'spades', rank: 'A' },
+      { suit: 'hearts', rank: '2' },
+      { suit: 'diamonds', rank: '3' },
+      { suit: 'clubs', rank: '4' },
+      { suit: 'spades', rank: '5' },
+    ];
+    const sixHighStraight: Card[] = [
+      { suit: 'spades', rank: '6' },
+      { suit: 'hearts', rank: '5' },
+      { suit: 'diamonds', rank: '4' },
+      { suit: 'clubs', rank: '3' },
+      { suit: 'spades', rank: '2' },
+    ];
+    expect(HandEvaluator.compareHands(wheel, sixHighStraight)).toBeLessThan(0);
+  });
 });

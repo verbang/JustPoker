@@ -30,9 +30,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import type { RoomPlayer } from '../../../../shared/types/room.types';
 
 const props = defineProps<{
-  players: any[];
+  players: RoomPlayer[];
   userId: string;
   maxSeats: number;
 }>();

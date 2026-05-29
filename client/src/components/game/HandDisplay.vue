@@ -8,10 +8,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { evaluateBestHand, HandResult } from '../../utils/handEvaluator';
+import type { Card } from '../../../../shared/types/game.types';
 
 const props = defineProps<{
-  holeCards: any[];
-  communityCards: any[];
+  holeCards: Card[];
+  communityCards: Card[];
 }>();
 
 const handResult = computed<HandResult | null>(() => {

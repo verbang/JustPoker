@@ -1,13 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import type { RoomPlayer } from '../../../shared/types/room.types';
 
-export interface RoomPlayer {
-  userId: string;
-  nickname: string;
-  seatNumber: number | null;
-  chips: number;
-  status: string;
-}
+export type { RoomPlayer };
 
 export const useRoomStore = defineStore('room', () => {
   const roomCode = ref<string | null>(null);

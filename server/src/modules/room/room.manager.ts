@@ -1,13 +1,76 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Room, RoomPlayer, PlayerStatus } from '../../../../shared/types/room.types';
 import { MAX_SEATS } from '../../../../shared/constants/game.constants';
+import { logger } from '../../utils/logger';
+
+// 空房间清理间隔（5分钟）
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+// 房间无玩家后多久清理（2分钟）
+const EMPTY_ROOM_THRESHOLD_MS = 2 * 60 * 1000;
+const ROOM_CODE_MIN = 10;
+const ROOM_CODE_MAX = 99;
 
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();
   private roomPlayers: Map<string, Map<string, RoomPlayer>> = new Map();
+  private roomLastActivity: Map<string, number> = new Map();
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
-  createRoom(hostId: string, hostNickname: string, initialChips: number, password?: string): Room {
+  constructor() {
+    this.startCleanupTimer();
+  }
+
+  /**
+   * 启动定时清理空房间的定时器
+   */
+  private startCleanupTimer(): void {
+    this.cleanupTimer = setInterval(() => {
+      this.cleanupEmptyRooms();
+    }, CLEANUP_INTERVAL_MS);
+
+    logger.info('空房间清理定时器已启动');
+  }
+
+  /**
+   * 清理空房间
+   */
+  private cleanupEmptyRooms(): void {
+    const now = Date.now();
+    const roomsToDelete: string[] = [];
+
+    for (const [roomCode, players] of this.roomPlayers.entries()) {
+      if (players.size === 0) {
+        const lastActivity = this.roomLastActivity.get(roomCode) || 0;
+        if (now - lastActivity > EMPTY_ROOM_THRESHOLD_MS) {
+          roomsToDelete.push(roomCode);
+        }
+      }
+    }
+
+    // 删除空房间
+    for (const roomCode of roomsToDelete) {
+      this.rooms.delete(roomCode);
+      this.roomPlayers.delete(roomCode);
+      this.roomLastActivity.delete(roomCode);
+      logger.info(`已清理空房间: ${roomCode}`);
+    }
+
+    if (roomsToDelete.length > 0) {
+      logger.info(`本次清理了 ${roomsToDelete.length} 个空房间`);
+    }
+  }
+
+  /**
+   * 更新房间活动时间
+   */
+  private updateRoomActivity(roomCode: string): void {
+    this.roomLastActivity.set(roomCode, Date.now());
+  }
+
+  createRoom(hostId: string, hostNickname: string, initialChips: number, password?: string): Room | null {
     const roomCode = this.generateRoomCode();
+    if (!roomCode) return null;
+
     const room: Room = {
       id: uuidv4(),
       roomCode,
@@ -24,6 +87,7 @@ export class RoomManager {
     this.rooms.set(roomCode, room);
     const players = new Map<string, RoomPlayer>();
     this.roomPlayers.set(roomCode, players);
+    this.updateRoomActivity(roomCode);
 
     // Add host as first player, directly seated at position 1
     const hostPlayer: RoomPlayer = {
@@ -44,6 +108,7 @@ export class RoomManager {
   joinRoom(roomCode: string, userId: string, nickname: string, chips: number, password?: string): RoomPlayer | null {
     const room = this.rooms.get(roomCode);
     if (!room) return null;
+    if (!Number.isInteger(chips) || chips <= 0) return null;
 
     // Verify password if room has one
     if (room.password && room.password !== password) {
@@ -71,12 +136,14 @@ export class RoomManager {
     };
 
     players.set(userId, player);
+    this.updateRoomActivity(roomCode);
     return player;
   }
 
   selectSeat(roomCode: string, userId: string, seatNumber: number): boolean {
     const players = this.roomPlayers.get(roomCode);
     if (!players) return false;
+    if (!Number.isInteger(seatNumber) || seatNumber < 1 || seatNumber > MAX_SEATS) return false;
 
     // Check if seat is occupied
     for (const player of players.values()) {
@@ -97,7 +164,11 @@ export class RoomManager {
     const players = this.roomPlayers.get(roomCode);
     if (!players) return false;
 
-    return players.delete(userId);
+    const result = players.delete(userId);
+    if (result) {
+      this.updateRoomActivity(roomCode);
+    }
+    return result;
   }
 
   getRoom(roomCode: string): Room | null {
@@ -143,6 +214,7 @@ export class RoomManager {
   rebuy(roomCode: string, userId: string, amount: number): boolean {
     const players = this.roomPlayers.get(roomCode);
     if (!players) return false;
+    if (!Number.isInteger(amount) || amount <= 0) return false;
 
     const player = players.get(userId);
     if (!player) return false;
@@ -162,11 +234,25 @@ export class RoomManager {
     }
   }
 
-  private generateRoomCode(): string {
+  private generateRoomCode(): string | null {
+    const capacity = ROOM_CODE_MAX - ROOM_CODE_MIN + 1;
+    if (this.rooms.size >= capacity) return null;
+
     let code: string;
     do {
-      code = Math.floor(10 + Math.random() * 90).toString();
+      code = Math.floor(ROOM_CODE_MIN + Math.random() * capacity).toString();
     } while (this.rooms.has(code));
     return code;
+  }
+
+  /**
+   * 停止清理定时器（用于优雅关闭）
+   */
+  destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+      logger.info('空房间清理定时器已停止');
+    }
   }
 }

@@ -1,6 +1,14 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '../utils/logger';
 
+type DatabaseRow = Record<string, unknown>;
+
+interface QueryOptions {
+  select?: string;
+  match?: Record<string, unknown>;
+  order?: string;
+}
+
 class DatabaseService {
   private client: SupabaseClient | null = null;
 
@@ -21,7 +29,7 @@ class DatabaseService {
     return this.client;
   }
 
-  async query(table: string, query?: any): Promise<any[]> {
+  async query(table: string, query?: QueryOptions): Promise<DatabaseRow[]> {
     if (!this.client) {
       logger.warn('Database not initialized');
       return [];
@@ -38,10 +46,10 @@ class DatabaseService {
       return [];
     }
 
-    return data || [];
+    return (data || []) as unknown as DatabaseRow[];
   }
 
-  async insert(table: string, data: any): Promise<any> {
+  async insert(table: string, data: DatabaseRow): Promise<DatabaseRow | null> {
     if (!this.client) {
       logger.warn('Database not initialized');
       return null;
@@ -61,7 +69,7 @@ class DatabaseService {
     return result;
   }
 
-  async update(table: string, id: string, data: any): Promise<any> {
+  async update(table: string, id: string, data: DatabaseRow): Promise<DatabaseRow | null> {
     if (!this.client) {
       logger.warn('Database not initialized');
       return null;

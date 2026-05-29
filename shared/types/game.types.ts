@@ -2,7 +2,7 @@
 export type GamePhase = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
 
 // 玩家操作类型
-export type PlayerAction = 'fold' | 'check' | 'call' | 'raise' | 'all_in';
+export type PlayerAction = 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'all_in';
 
 // 花色
 export type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
@@ -53,6 +53,7 @@ export interface GameState {
   sidePots: SidePot[];
   status: 'waiting' | 'playing' | 'finished';
   winnerId?: string;
+  winnerIds?: string[];
   winningHand?: string;
 }
 

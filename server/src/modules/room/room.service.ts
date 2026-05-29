@@ -10,8 +10,9 @@ export class RoomService {
     this.roomManager = new RoomManager();
   }
 
-  async createRoom(hostId: string, request: CreateRoomRequest): Promise<Room> {
+  async createRoom(hostId: string, request: CreateRoomRequest): Promise<Room | null> {
     const room = this.roomManager.createRoom(hostId, request.nickname, request.initialChips, request.password);
+    if (!room) return null;
 
     // Save to database if available
     await database.insert('rooms', {
@@ -28,17 +29,11 @@ export class RoomService {
     return room;
   }
 
-  async joinRoom(request: JoinRoomRequest): Promise<RoomPlayer | null> {
-    const player = this.roomManager.joinRoom(
-      request.roomCode,
-      request.nickname, // Using nickname as userId for simplicity
-      request.nickname,
-      request.chips,
-      request.password
-    );
+  async joinRoom(roomCode: string, userId: string, nickname: string, chips: number, password?: string): Promise<RoomPlayer | null> {
+    const player = this.roomManager.joinRoom(roomCode, userId, nickname, chips, password);
 
     if (player) {
-      logger.info(`Player ${request.nickname} joined room ${request.roomCode}`);
+      logger.info(`Player ${nickname} joined room ${roomCode}`);
     }
 
     return player;
@@ -78,6 +73,13 @@ export class RoomService {
 
   getRoomManager(): RoomManager {
     return this.roomManager;
+  }
+
+  /**
+   * 停止房间管理器的清理定时器（用于优雅关闭）
+   */
+  destroy(): void {
+    this.roomManager.destroy();
   }
 }
 

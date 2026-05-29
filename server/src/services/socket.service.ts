@@ -2,15 +2,27 @@ import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
 import { SOCKET_EVENTS } from '../../../shared/constants/socket.constants';
+import { ACTION_TIMEOUT } from '../../../shared/constants/game.constants';
 import { roomService } from '../modules/room/room.service';
 import { GameEngine } from '../modules/game/game.engine';
-import { GameState, GamePlayer } from '../../../shared/types/game.types';
+import { GameState, GamePlayer, PlayerAction } from '../../../shared/types/game.types';
+
+interface SocketPayload {
+  [key: string]: unknown;
+}
 
 class SocketService {
   private io: Server | null = null;
   private gameEngines: Map<string, GameEngine> = new Map();
   private gameStates: Map<string, GameState> = new Map();
+  private dealerSeatNumbers: Map<string, number> = new Map();
   private countdowns: Map<string, NodeJS.Timeout> = new Map();
+  private actionTimers: Map<string, NodeJS.Timeout> = new Map();
+  private userSockets: Map<string, string> = new Map();
+  // 保存断线玩家的信息，用于重连恢复
+  private disconnectedPlayers: Map<string, { userId: string; roomCode: string; timestamp: number }> = new Map();
+  // 断线重连超时时间（30秒）
+  private readonly RECONNECT_TIMEOUT_MS = 30000;
 
   initialize(httpServer: HttpServer): void {
     this.io = new Server(httpServer, {
@@ -28,6 +40,19 @@ class SocketService {
         socket.join(data.roomCode);
         socket.data.userId = data.userId;
         socket.data.roomCode = data.roomCode;
+        this.userSockets.set(data.userId, socket.id);
+
+        // 检查是否是断线重连
+        const disconnectedKey = `${data.roomCode}:${data.userId}`;
+        const disconnectedInfo = this.disconnectedPlayers.get(disconnectedKey);
+        if (disconnectedInfo) {
+          // 重连成功，移除断线记录
+          this.disconnectedPlayers.delete(disconnectedKey);
+          logger.info(`玩家 ${data.userId} 重连成功`);
+
+          // 通知其他玩家重连成功
+          this.emitToRoom(data.roomCode, SOCKET_EVENTS.PLAYER_JOINED, { userId: data.userId, reconnected: true });
+        }
 
         const players = roomService.getRoomPlayers(data.roomCode);
         this.emitToRoom(data.roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
@@ -56,6 +81,8 @@ class SocketService {
         if (success) {
           const players = roomService.getRoomPlayers(data.roomCode);
           this.emitToRoom(data.roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
+        } else {
+          this.emitToUser(socket.data.userId, SOCKET_EVENTS.ERROR, { message: '座位无效或已被占用' });
         }
       });
 
@@ -87,11 +114,18 @@ class SocketService {
 
       // Rebuy
       socket.on(SOCKET_EVENTS.REBUY, (data: { roomCode: string; amount: number }) => {
+        if (this.gameStates.has(data.roomCode)) {
+          this.emitToUser(socket.data.userId, SOCKET_EVENTS.ERROR, { message: '游戏进行中不能重新买入' });
+          return;
+        }
+
         const success = roomService.rebuy(data.roomCode, socket.data.userId, data.amount);
 
         if (success) {
           const players = roomService.getRoomPlayers(data.roomCode);
           this.emitToRoom(data.roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
+        } else {
+          this.emitToUser(socket.data.userId, SOCKET_EVENTS.ERROR, { message: '买入金额无效' });
         }
       });
 
@@ -99,36 +133,43 @@ class SocketService {
         const userId = socket.data.userId as string;
         const roomCode = socket.data.roomCode as string;
         logger.info(`Client disconnected: ${socket.id}, userId: ${userId}`);
+        if (userId && this.userSockets.get(userId) === socket.id) {
+          this.userSockets.delete(userId);
+        }
 
         if (roomCode && userId) {
-          // Handle player disconnect during active game
+          // 检查是否在游戏中
           const gameState = this.gameStates.get(roomCode);
           if (gameState) {
             const player = gameState.players.find(p => p.userId === userId);
             if (player && player.status === 'playing') {
-              // Auto-fold the disconnected player
-              try {
-                const engine = this.gameEngines.get(roomCode);
-                if (engine) {
-                  const newState = engine.playerAction(gameState, userId, 'fold');
-                  this.gameStates.set(roomCode, newState);
-                  this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, newState);
+              // 保存断线玩家信息，等待重连
+              this.disconnectedPlayers.set(`${roomCode}:${userId}`, {
+                userId,
+                roomCode,
+                timestamp: Date.now()
+              });
+              logger.info(`玩家 ${userId} 在游戏中断线，等待重连...`);
 
-                  if (newState.status === 'finished') {
-                    this.handleGameFinished(roomCode, newState);
-                  }
+              // 设置重连超时
+              setTimeout(() => {
+                const disconnectedInfo = this.disconnectedPlayers.get(`${roomCode}:${userId}`);
+                if (disconnectedInfo) {
+                  // 超时未重连，自动弃牌
+                  logger.info(`玩家 ${userId} 重连超时，自动弃牌`);
+                  this.disconnectedPlayers.delete(`${roomCode}:${userId}`);
+                  this.handlePlayerDisconnect(roomCode, userId);
                 }
-              } catch {
-                // Player's turn might have already passed, that's ok
-              }
+              }, this.RECONNECT_TIMEOUT_MS);
+
+              // 通知其他玩家有玩家断线
+              this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId, reconnecting: true });
+              return; // 不立即从房间移除，等待重连或超时
             }
           }
 
-          // Remove player from room
-          roomService.leaveRoom(roomCode, userId);
-          const players = roomService.getRoomPlayers(roomCode);
-          this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
-          this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId });
+          // 非游戏中断线，直接移除
+          this.handlePlayerLeaveRoom(roomCode, userId);
         }
       });
     });
@@ -203,7 +244,13 @@ class SocketService {
 
     // Create and start game
     const engine = new GameEngine();
-    const gameState = engine.startGame(roomCode, gamePlayers, room.smallBlind, room.bigBlind);
+    const gameState = engine.startGame(
+      roomCode,
+      gamePlayers,
+      room.smallBlind,
+      room.bigBlind,
+      this.dealerSeatNumbers.get(roomCode)
+    );
 
     this.gameEngines.set(roomCode, engine);
     this.gameStates.set(roomCode, gameState);
@@ -216,6 +263,7 @@ class SocketService {
     logger.info(`Game started in room ${roomCode} with ${readyPlayers.length} players`);
     this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_START, { gameState });
     this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, gameState);
+    this.scheduleActionTimeout(roomCode, gameState);
   }
 
   private handlePlayerAction(roomCode: string, userId: string, action: string, amount?: number): void {
@@ -227,8 +275,17 @@ class SocketService {
       return;
     }
 
+    // Validate action type
+    const validActions: PlayerAction[] = ['fold', 'check', 'call', 'bet', 'raise', 'all_in'];
+    if (!validActions.includes(action as PlayerAction)) {
+      logger.warn(`Invalid action: ${action}`);
+      this.emitToUser(userId, SOCKET_EVENTS.ERROR, { message: 'Invalid action' });
+      return;
+    }
+
     try {
-      const newState = engine.playerAction(currentState, userId, action as any, amount);
+      this.clearActionTimeout(roomCode);
+      const newState = engine.playerAction(currentState, userId, action as PlayerAction, amount);
       this.gameStates.set(roomCode, newState);
 
       // Broadcast updated game state
@@ -237,14 +294,20 @@ class SocketService {
       // Check if game finished
       if (newState.status === 'finished') {
         this.handleGameFinished(roomCode, newState);
+      } else {
+        this.scheduleActionTimeout(roomCode, newState);
       }
-    } catch (error: any) {
-      logger.error(`Player action error: ${error.message}`);
-      this.emitToSocket(userId, SOCKET_EVENTS.ERROR, { message: error.message });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Player action error: ${errorMessage}`);
+      this.emitToUser(userId, SOCKET_EVENTS.ERROR, { message: errorMessage });
+      this.scheduleActionTimeout(roomCode, currentState);
     }
   }
 
   private handleGameFinished(roomCode: string, gameState: GameState): void {
+    this.clearActionTimeout(roomCode);
+
     // Update player chips and reset status
     gameState.players.forEach(p => {
       const roomPlayers = roomService.getRoomPlayers(roomCode);
@@ -259,6 +322,7 @@ class SocketService {
         }
       }
     });
+    this.dealerSeatNumbers.set(roomCode, gameState.players[gameState.dealerIndex]?.seatNumber ?? 1);
 
     // Clean up game state
     this.gameEngines.delete(roomCode);
@@ -267,21 +331,124 @@ class SocketService {
     // Broadcast final state
     const players = roomService.getRoomPlayers(roomCode);
     this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
-    this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_OVER, { winnerId: gameState.winnerId });
+    this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_OVER, {
+      winnerId: gameState.winnerId,
+      winnerIds: gameState.winnerIds || (gameState.winnerId ? [gameState.winnerId] : []),
+    });
 
     logger.info(`Game finished in room ${roomCode}, winner: ${gameState.winnerId}`);
+  }
+
+  private scheduleActionTimeout(roomCode: string, gameState: GameState): void {
+    this.clearActionTimeout(roomCode);
+
+    if (gameState.status !== 'playing') return;
+
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (!currentPlayer || currentPlayer.status !== 'playing') return;
+
+    const timer = setTimeout(() => {
+      this.handleActionTimeout(roomCode, currentPlayer.userId);
+    }, ACTION_TIMEOUT * 1000);
+
+    this.actionTimers.set(roomCode, timer);
+  }
+
+  private clearActionTimeout(roomCode: string): void {
+    const timer = this.actionTimers.get(roomCode);
+    if (!timer) return;
+
+    clearTimeout(timer);
+    this.actionTimers.delete(roomCode);
+  }
+
+  private handleActionTimeout(roomCode: string, userId: string): void {
+    const engine = this.gameEngines.get(roomCode);
+    const currentState = this.gameStates.get(roomCode);
+
+    if (!engine || !currentState || currentState.status !== 'playing') return;
+
+    const currentPlayer = currentState.players[currentState.currentPlayerIndex];
+    if (!currentPlayer || currentPlayer.userId !== userId || currentPlayer.status !== 'playing') return;
+
+    const action: PlayerAction = currentPlayer.bet >= currentState.currentBet ? 'check' : 'fold';
+
+    try {
+      const newState = engine.playerAction(currentState, userId, action);
+      this.gameStates.set(roomCode, newState);
+      this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, newState);
+
+      if (newState.status === 'finished') {
+        this.handleGameFinished(roomCode, newState);
+      } else {
+        this.scheduleActionTimeout(roomCode, newState);
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Action timeout error: ${errorMessage}`);
+      this.scheduleActionTimeout(roomCode, currentState);
+    }
   }
 
   getIO(): Server | null {
     return this.io;
   }
 
-  emitToRoom(roomId: string, event: string, data: any): void {
+  emitToRoom(roomId: string, event: string, data: SocketPayload | GameState): void {
     this.io?.to(roomId).emit(event, data);
   }
 
-  emitToSocket(socketId: string, event: string, data: any): void {
+  emitToSocket(socketId: string, event: string, data: SocketPayload | GameState): void {
     this.io?.to(socketId).emit(event, data);
+  }
+
+  emitToUser(userId: string, event: string, data: SocketPayload): void {
+    const socketId = this.userSockets.get(userId);
+    if (socketId) {
+      this.emitToSocket(socketId, event, data);
+    }
+  }
+
+  /**
+   * 处理玩家在游戏中断线（超时未重连）
+   */
+  private handlePlayerDisconnect(roomCode: string, userId: string): void {
+    const gameState = this.gameStates.get(roomCode);
+    if (gameState) {
+      const player = gameState.players.find(p => p.userId === userId);
+      if (player && player.status === 'playing') {
+        // 自动弃牌
+        try {
+          const engine = this.gameEngines.get(roomCode);
+          if (engine) {
+            const newState = engine.forceFold(gameState, userId);
+            this.gameStates.set(roomCode, newState);
+            this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, newState);
+
+            if (newState.status === 'finished') {
+              this.handleGameFinished(roomCode, newState);
+            } else {
+              this.scheduleActionTimeout(roomCode, newState);
+            }
+          }
+        } catch {
+          // 玩家的回合可能已经过去
+        }
+      }
+    }
+
+    // 从房间移除
+    this.handlePlayerLeaveRoom(roomCode, userId);
+  }
+
+  /**
+   * 处理玩家离开房间
+   */
+  private handlePlayerLeaveRoom(roomCode: string, userId: string): void {
+    roomService.leaveRoom(roomCode, userId);
+    const players = roomService.getRoomPlayers(roomCode);
+    this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
+    this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId });
   }
 }
 

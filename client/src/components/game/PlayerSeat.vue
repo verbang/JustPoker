@@ -57,6 +57,8 @@
 </template>
 
 <script setup lang="ts">
+import type { Card, Suit } from '../../../../shared/types/game.types';
+
 const props = defineProps<{
   player: {
     userId: string;
@@ -70,7 +72,7 @@ const props = defineProps<{
   isMe: boolean;
   isCurrentPlayer: boolean;
   isWinner?: boolean;
-  myCards?: any[];
+  myCards?: Card[];
   emojis?: { id: number; userId: string; emoji: string }[];
 }>();
 
@@ -78,14 +80,14 @@ const emit = defineEmits<{
   (e: 'tip'): void;
 }>();
 
-function getSuitSymbol(suit: string): string {
-  const symbols: Record<string, string> = {
+function getSuitSymbol(suit: Suit): string {
+  const symbols: Record<Suit, string> = {
     hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠',
   };
   return symbols[suit] || '';
 }
 
-function getSuitClass(suit: string): string {
+function getSuitClass(suit: Suit): string {
   if (suit === 'hearts' || suit === 'diamonds') return 'suit-red';
   return 'suit-black';
 }

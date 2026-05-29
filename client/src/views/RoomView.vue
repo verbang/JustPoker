@@ -24,6 +24,7 @@
           :user-id="userId"
           :my-cards="myCards"
           :winner-id="winnerId"
+          :winner-ids="winnerIds"
           :active-emojis="activeEmojis"
           @tip="handleTip"
         />
@@ -63,6 +64,7 @@
           @fold="handleFold"
           @check="handleCheck"
           @call="handleCall"
+          @bet="handleBet"
           @raise="handleRaise"
           @all-in="handleAllIn"
         />
@@ -88,7 +90,10 @@ import { useRoomStore } from '../stores/room';
 import { useGameStore } from '../stores/game';
 import { socketService } from '../services/socket';
 import { soundManager } from '../utils/sounds';
+import type { GamePlayer } from '../../../shared/types/game.types';
+import type { RoomPlayer } from '../../../shared/types/room.types';
 import GameTable from '../components/game/GameTable.vue';
+import type { TablePlayer } from '../components/game/GameTable.vue';
 import ActionPanel from '../components/game/ActionPanel.vue';
 import EmojiPanel from '../components/game/EmojiPanel.vue';
 import Scoreboard from '../components/game/Scoreboard.vue';
@@ -119,22 +124,35 @@ const seatedPlayers = computed(() => {
 
   // During gameplay, merge game state data (chips, status) into room players
   if (gameStore.gameState) {
-    return roomSeated.map(p => {
+    return roomSeated.map<TablePlayer>(p => {
       const gp = gameStore.gameState!.players.find(gp => gp.userId === p.userId);
-      return gp ? { ...p, chips: gp.chips, status: gp.status } : p;
+      return {
+        ...p,
+        chips: gp?.chips ?? p.chips,
+        status: gp?.status ?? p.status,
+        isDealer: gp?.isDealer ?? false,
+        isSmallBlind: gp?.isSmallBlind ?? false,
+        isBigBlind: gp?.isBigBlind ?? false,
+      };
     });
   }
-  return roomSeated;
+  return roomSeated.map<TablePlayer>(p => ({
+    ...p,
+    isDealer: false,
+    isSmallBlind: false,
+    isBigBlind: false,
+  }));
 });
 
 const winnerId = computed(() => gameStore.gameState?.winnerId);
+const winnerIds = computed(() => gameStore.gameState?.winnerIds || (winnerId.value ? [winnerId.value] : []));
 const communityCards = computed(() => gameStore.gameState?.communityCards || []);
 const pot = computed(() => gameStore.gameState?.pot || 0);
 const currentPlayerIndex = computed(() => gameStore.gameState?.currentPlayerIndex || 0);
 const currentBet = computed(() => gameStore.gameState?.currentBet || 0);
 const minRaise = computed(() => gameStore.gameState?.minRaise || 10);
 const myBet = computed(() => gameStore.myPlayer?.bet || 0);
-const maxChips = computed(() => gameStore.myPlayer?.chips || 1000);
+const maxChips = computed(() => (gameStore.myPlayer?.chips || 0) + myBet.value);
 const myCards = computed(() => gameStore.myCards);
 const isMyTurn = computed(() => gameStore.isMyTurn);
 const isCooldown = ref(false);
@@ -222,6 +240,10 @@ function handleCall() {
   socketService.playerAction(roomCode.value, 'call');
 }
 
+function handleBet(amount: number) {
+  socketService.playerAction(roomCode.value, 'bet', amount);
+}
+
 function handleRaise(amount: number) {
   socketService.playerAction(roomCode.value, 'raise', amount);
 }
@@ -251,7 +273,7 @@ function handleEmoji(emoji: string) {
   }
 }
 
-function handleTip(player: any) {
+function handleTip(player: TablePlayer | GamePlayer | RoomPlayer) {
   console.log('Tip player:', player.nickname);
 }
 </script>

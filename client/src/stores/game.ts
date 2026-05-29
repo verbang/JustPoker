@@ -1,38 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useUserStore } from './user';
+import type { GamePlayer, GameState } from '../../../shared/types/game.types';
 
-export interface GamePlayer {
-  userId: string;
-  nickname: string;
-  chips: number;
-  bet: number;
-  totalBet: number;
-  cards: any[];
-  status: string;
-  isDealer: boolean;
-  isSmallBlind: boolean;
-  isBigBlind: boolean;
-}
-
-export interface GameState {
-  id: string;
-  roomId: string;
-  phase: string;
-  pot: number;
-  communityCards: any[];
-  currentPlayerIndex: number;
-  dealerIndex: number;
-  smallBlindIndex: number;
-  bigBlindIndex: number;
-  currentBet: number;
-  minRaise: number;
-  players: GamePlayer[];
-  sidePots: any[];
-  status: string;
-  winnerId?: string;
-  winningHand?: string;
-}
+export type { GamePlayer, GameState };
 
 export const useGameStore = defineStore('game', () => {
   const gameState = ref<GameState | null>(null);

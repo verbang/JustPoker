@@ -22,18 +22,23 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import type { GamePlayer, GameState } from '../../../../shared/types/game.types';
+import type { RoomPlayer } from '../../../../shared/types/room.types';
+
+type DisplayStatus = RoomPlayer['status'] | GamePlayer['status'] | GameState['status'];
+type DisplayPlayer = RoomPlayer & { displayStatus: DisplayStatus };
 
 const props = defineProps<{
-  players: any[];
+  players: RoomPlayer[];
   gameState?: {
-    players: { userId: string; status: string }[];
+    players: { userId: string; status: GamePlayer['status'] }[];
   } | null;
 }>();
 
-const displayPlayers = computed(() => {
+const displayPlayers = computed<DisplayPlayer[]>(() => {
   return props.players.map(p => {
     // During game, prefer game-level status; otherwise use room-level status
-    let displayStatus = p.status;
+    let displayStatus: DisplayStatus = p.status;
     if (props.gameState) {
       const gamePlayer = props.gameState.players.find(gp => gp.userId === p.userId);
       if (gamePlayer) {
@@ -44,8 +49,8 @@ const displayPlayers = computed(() => {
   });
 });
 
-function getStatusText(status: string): string {
-  const statusMap: Record<string, string> = {
+function getStatusText(status: DisplayStatus): string {
+  const statusMap: Record<DisplayStatus, string> = {
     joined: '已加入',
     seated: '已入座',
     ready: '已准备',
@@ -53,6 +58,8 @@ function getStatusText(status: string): string {
     folded: '已弃牌',
     all_in: '全下',
     out: '已出局',
+    finished: '已结束',
+    waiting: '等待中',
   };
   return statusMap[status] || status;
 }

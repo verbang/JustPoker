@@ -19,14 +19,15 @@
     >
       跟注 {{ callAmount }}
     </button>
-    <button class="action-btn raise" @click="$emit('raise', raiseAmount)" :disabled="!isMyTurn">
-      加注 {{ raiseAmount }}
+    <button class="action-btn raise" @click="emitBetOrRaise" :disabled="!isMyTurn || !canRaise">
+      {{ raiseLabel }} {{ raiseAmount }}
     </button>
     <input
       type="range"
       v-model.number="raiseAmount"
       :min="raiseMin"
       :max="maxChips"
+      :disabled="!canRaise"
       class="raise-slider"
     />
     <button class="action-btn all-in" @click="$emit('all-in')" :disabled="!isMyTurn">
@@ -46,24 +47,35 @@ const props = defineProps<{
   maxChips: number;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'fold'): void;
   (e: 'check'): void;
   (e: 'call'): void;
+  (e: 'bet', amount: number): void;
   (e: 'raise', amount: number): void;
   (e: 'all-in'): void;
 }>();
 
-const raiseAmount = ref(props.currentBet + props.minRaise);
+const raiseAmount = ref(Math.min(props.currentBet + props.minRaise, props.maxChips));
 
 const canCheck = computed(() => props.myBet >= props.currentBet);
 const callAmount = computed(() => props.currentBet - props.myBet);
 const raiseMin = computed(() => props.currentBet + props.minRaise);
+const canRaise = computed(() => props.maxChips >= raiseMin.value);
+const raiseLabel = computed(() => props.currentBet === 0 ? '下注' : '加注');
+
+function emitBetOrRaise() {
+  if (props.currentBet === 0) {
+    emit('bet', raiseAmount.value);
+  } else {
+    emit('raise', raiseAmount.value);
+  }
+}
 
 watch(
   () => [props.currentBet, props.minRaise],
   () => {
-    raiseAmount.value = props.currentBet + props.minRaise;
+    raiseAmount.value = Math.min(props.currentBet + props.minRaise, props.maxChips);
   }
 );
 </script>

@@ -24,7 +24,7 @@ export const HAND_RANK_ORDER = {
 export const GAME_PHASES = ['preflop', 'flop', 'turn', 'river', 'showdown'] as const;
 
 // 玩家操作
-export const PLAYER_ACTIONS = ['fold', 'check', 'call', 'raise', 'all_in'] as const;
+export const PLAYER_ACTIONS = ['fold', 'check', 'call', 'bet', 'raise', 'all_in'] as const;
 
 // 座位数量
 export const MAX_SEATS = 10;

@@ -21,12 +21,14 @@
 </template>
 
 <script setup lang="ts">
+import type { Card, Suit } from '../../../../shared/types/game.types';
+
 defineProps<{
-  cards: any[];
+  cards: Card[];
 }>();
 
-function getSuitSymbol(suit: string): string {
-  const symbols: Record<string, string> = {
+function getSuitSymbol(suit: Suit): string {
+  const symbols: Record<Suit, string> = {
     hearts: '♥',
     diamonds: '♦',
     clubs: '♣',
@@ -35,7 +37,7 @@ function getSuitSymbol(suit: string): string {
   return symbols[suit] || '';
 }
 
-function getSuitClass(suit: string): string {
+function getSuitClass(suit: Suit): string {
   if (suit === 'hearts' || suit === 'diamonds') return 'suit-red';
   return 'suit-black';
 }

@@ -11,7 +11,7 @@
         :player="player"
         :is-me="player.userId === userId"
         :is-current-player="player.seatNumber === currentSeatNumber"
-        :is-winner="player.userId === winnerId"
+        :is-winner="winnerIds.includes(player.userId)"
         :my-cards="player.userId === userId ? myCards : []"
         :emojis="getPlayerEmojis(player.userId)"
         :style="getSeatStyle(displayIndex, displayPlayers.length)"
@@ -25,20 +25,32 @@
 import { computed } from 'vue';
 import PlayerSeat from './PlayerSeat.vue';
 import CommunityCards from './CommunityCards.vue';
+import type { Card, GamePlayer } from '../../../../shared/types/game.types';
+import type { RoomPlayer } from '../../../../shared/types/room.types';
+
+export type TablePlayer = Omit<RoomPlayer, 'status'> & {
+  status: RoomPlayer['status'] | GamePlayer['status'];
+  isDealer: boolean;
+  isSmallBlind: boolean;
+  isBigBlind: boolean;
+};
 
 const props = defineProps<{
-  players: any[];
-  communityCards: any[];
+  players: TablePlayer[];
+  communityCards: Card[];
   pot: number;
   currentPlayerIndex: number;
   userId: string;
-  myCards: any[];
+  myCards: Card[];
   winnerId?: string;
+  winnerIds?: string[];
   activeEmojis: { id: number; userId: string; emoji: string }[];
 }>();
 
+const winnerIds = computed(() => props.winnerIds || (props.winnerId ? [props.winnerId] : []));
+
 defineEmits<{
-  (e: 'tip', player: any): void;
+  (e: 'tip', player: TablePlayer): void;
 }>();
 
 function getPlayerEmojis(userId: string) {
@@ -46,13 +58,21 @@ function getPlayerEmojis(userId: string) {
 }
 
 /**
- * The seat number of the current acting player from the game state.
- * We need to map currentPlayerIndex (array index in sorted seat order)
- * back to seat number.
+ * 当前操作玩家的座位号
+ * 需要将 currentPlayerIndex（原始数组索引）映射到 displayPlayers 中的显示位置
  */
 const currentSeatNumber = computed(() => {
   if (props.currentPlayerIndex < 0 || props.currentPlayerIndex >= props.players.length) return -1;
-  return props.players[props.currentPlayerIndex]?.seatNumber ?? -1;
+
+  // 获取当前玩家的 userId
+  const currentUserId = props.players[props.currentPlayerIndex]?.userId;
+  if (!currentUserId) return -1;
+
+  // 在 displayPlayers 中找到该玩家并返回其座位号
+  const displayIndex = displayPlayers.value.findIndex(p => p.userId === currentUserId);
+  if (displayIndex === -1) return -1;
+
+  return displayPlayers.value[displayIndex]?.seatNumber ?? -1;
 });
 
 /**
@@ -64,7 +84,7 @@ const displayPlayers = computed(() => {
   if (myIndex === -1) return props.players;
 
   const total = props.players.length;
-  const result = [];
+  const result: TablePlayer[] = [];
   for (let i = 0; i < total; i++) {
     result.push(props.players[(myIndex + i) % total]);
   }

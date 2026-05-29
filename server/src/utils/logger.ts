@@ -12,31 +12,31 @@ class Logger {
     this.level = level;
   }
 
-  private formatMessage(level: string, message: string, data?: any): string {
+  private formatMessage(level: string, message: string, data?: unknown): string {
     const timestamp = new Date().toISOString();
     const base = `[${timestamp}] [${level}] ${message}`;
     return data ? `${base} ${JSON.stringify(data)}` : base;
   }
 
-  debug(message: string, data?: any): void {
+  debug(message: string, data?: unknown): void {
     if (this.level <= LogLevel.DEBUG) {
       console.debug(this.formatMessage('DEBUG', message, data));
     }
   }
 
-  info(message: string, data?: any): void {
+  info(message: string, data?: unknown): void {
     if (this.level <= LogLevel.INFO) {
       console.info(this.formatMessage('INFO', message, data));
     }
   }
 
-  warn(message: string, data?: any): void {
+  warn(message: string, data?: unknown): void {
     if (this.level <= LogLevel.WARN) {
       console.warn(this.formatMessage('WARN', message, data));
     }
   }
 
-  error(message: string, error?: Error | any): void {
+  error(message: string, error?: unknown): void {
     if (this.level <= LogLevel.ERROR) {
       console.error(this.formatMessage('ERROR', message, error));
     }

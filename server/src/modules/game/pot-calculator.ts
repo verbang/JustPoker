@@ -5,6 +5,11 @@ export interface PotResult {
   sidePots: SidePot[];
 }
 
+export interface Pot {
+  amount: number;
+  eligiblePlayerIds: string[];
+}
+
 export class PotCalculator {
   static calculatePots(players: GamePlayer[]): PotResult {
     const allPlayers = players.filter(p => p.totalBet > 0);
@@ -46,8 +51,7 @@ export class PotCalculator {
   }
 
   static distributeWinnings(
-    players: GamePlayer[],
-    pots: { amount: number; eligiblePlayerIds: string[] }[],
+    pots: Pot[],
     winnerIds: string[]
   ): Map<string, number> {
     const winnings = new Map<string, number>();
