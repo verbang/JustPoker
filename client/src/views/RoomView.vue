@@ -26,31 +26,13 @@
           :winner-id="winnerId"
           :winner-ids="winnerIds"
           :active-emojis="activeEmojis"
+          :action-remaining-seconds="actionRemainingSeconds"
+          :show-ready-button="myStatus === 'seated'"
+          :hand-hole-cards="myCards"
+          :hand-community-cards="communityCards"
+          @ready="handleReady"
           @tip="handleTip"
         />
-
-        <div class="table-status">
-          <!-- Ready Button (visible when I am 'seated') -->
-          <button
-            v-if="myStatus === 'seated'"
-            class="ready-btn"
-            @click="handleReady"
-          >
-            准备
-          </button>
-
-          <!-- Waiting indicator (when I am 'ready' and game hasn't started) -->
-          <div v-if="myStatus === 'ready' && !gameStore.gameState" class="waiting-indicator">
-            <span class="waiting-dot"></span>
-            等待其他玩家准备...
-          </div>
-
-          <HandDisplay
-            v-if="gameStore.gameState"
-            :hole-cards="myCards"
-            :community-cards="communityCards"
-          />
-        </div>
       </main>
 
       <aside class="control-zone">
@@ -60,6 +42,7 @@
           :current-bet="currentBet"
           :my-bet="myBet"
           :min-raise="minRaise"
+          :min-raise-to="minRaiseTo"
           :max-chips="maxChips"
           @fold="handleFold"
           @check="handleCheck"
@@ -83,13 +66,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useUserStore } from '../stores/user';
 import { useRoomStore } from '../stores/room';
 import { useGameStore } from '../stores/game';
 import { socketService } from '../services/socket';
+import { roomApi } from '../services/api';
 import { soundManager } from '../utils/sounds';
+import { ACTION_TIMEOUT } from '../../../shared/constants/game.constants';
 import type { GamePlayer } from '../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../shared/types/room.types';
 import GameTable from '../components/game/GameTable.vue';
@@ -98,7 +83,6 @@ import ActionPanel from '../components/game/ActionPanel.vue';
 import EmojiPanel from '../components/game/EmojiPanel.vue';
 import Scoreboard from '../components/game/Scoreboard.vue';
 import SeatSelection from '../components/game/SeatSelection.vue';
-import HandDisplay from '../components/game/HandDisplay.vue';
 import Countdown from '../components/game/Countdown.vue';
 
 const route = useRoute();
@@ -122,14 +106,16 @@ const seatedPlayers = computed(() => {
     .filter(p => p.seatNumber !== null)
     .sort((a, b) => (a.seatNumber || 0) - (b.seatNumber || 0));
 
-  // During gameplay, merge game state data (chips, status) into room players
+  // During gameplay, merge game state data into room players.
+  // After a hand finishes, keep cards/community cards for review but let room status drive ready indicators.
   if (gameStore.gameState) {
+    const isPlaying = gameStore.gameState.status === 'playing';
     return roomSeated.map<TablePlayer>(p => {
       const gp = gameStore.gameState!.players.find(gp => gp.userId === p.userId);
       return {
         ...p,
         chips: gp?.chips ?? p.chips,
-        status: gp?.status ?? p.status,
+        status: isPlaying ? (gp?.status ?? p.status) : p.status,
         isDealer: gp?.isDealer ?? false,
         isSmallBlind: gp?.isSmallBlind ?? false,
         isBigBlind: gp?.isBigBlind ?? false,
@@ -144,25 +130,52 @@ const seatedPlayers = computed(() => {
   }));
 });
 
+const lastWinnerIds = ref<string[]>([]);
 const winnerId = computed(() => gameStore.gameState?.winnerId);
-const winnerIds = computed(() => gameStore.gameState?.winnerIds || (winnerId.value ? [winnerId.value] : []));
+const winnerIds = computed(() => {
+  if (gameStore.gameState?.status === 'playing') return [];
+  return gameStore.gameState?.winnerIds || lastWinnerIds.value || (winnerId.value ? [winnerId.value] : []);
+});
 const communityCards = computed(() => gameStore.gameState?.communityCards || []);
 const pot = computed(() => gameStore.gameState?.pot || 0);
 const currentPlayerIndex = computed(() => gameStore.gameState?.currentPlayerIndex || 0);
 const currentBet = computed(() => gameStore.gameState?.currentBet || 0);
 const minRaise = computed(() => gameStore.gameState?.minRaise || 10);
+const minRaiseTo = computed(() => gameStore.gameState?.minRaiseTo);
 const myBet = computed(() => gameStore.myPlayer?.bet || 0);
 const maxChips = computed(() => (gameStore.myPlayer?.chips || 0) + myBet.value);
 const myCards = computed(() => gameStore.myCards);
 const isMyTurn = computed(() => gameStore.isMyTurn);
+const actionTimeoutEnabled = computed(() => roomStore.actionTimeoutEnabled);
 const isCooldown = ref(false);
 const emojiTimestamps: number[] = [];
 interface ActiveEmoji { id: number; userId: string; emoji: string; }
 let emojiIdCounter = 0;
 const activeEmojis = ref<ActiveEmoji[]>([]);
 const countdownValue = ref<number | null>(null);
+const actionRemainingSeconds = ref<number | null>(null);
+let actionCountdownTimer: ReturnType<typeof setInterval> | null = null;
 
-onMounted(() => {
+const activeActionKey = computed(() => {
+  if (!actionTimeoutEnabled.value) return null;
+
+  const state = gameStore.gameState;
+  if (!state || state.status !== 'playing') return null;
+
+  const currentPlayer = state.players[state.currentPlayerIndex];
+  if (!currentPlayer || currentPlayer.status !== 'playing') return null;
+
+  return `${state.id}:${state.phase}:${state.currentPlayerIndex}:${currentPlayer.userId}:${state.currentBet}:${currentPlayer.bet}`;
+});
+
+onMounted(async () => {
+  try {
+    const response = await roomApi.getRoomInfo(roomCode.value);
+    roomStore.setActionTimeoutEnabled(response.data.room.actionTimeoutEnabled ?? false);
+  } catch (error) {
+    console.error('Failed to get room info:', error);
+  }
+
   socketService.connect();
   socketService.joinRoom(roomCode.value, userId.value);
 
@@ -181,6 +194,9 @@ onMounted(() => {
 
   socketService.onGameUpdate((data) => {
     gameStore.updateGameState(data);
+    if (data.status === 'playing') {
+      lastWinnerIds.value = [];
+    }
     // Clear countdown when game starts
     countdownValue.value = null;
   });
@@ -210,15 +226,38 @@ onMounted(() => {
     countdownValue.value = null;
   });
 
-  socketService.onGameOver(() => {
-    // Keep game state so winner crown remains visible
-    // Game state will be cleared when next game starts
+  socketService.onGameOver((data) => {
+    lastWinnerIds.value = data.winnerIds || (data.winnerId ? [data.winnerId] : []);
+    actionRemainingSeconds.value = null;
   });
 });
 
 onUnmounted(() => {
   socketService.offAll();
+  stopActionCountdown();
 });
+
+watch(activeActionKey, (key) => {
+  stopActionCountdown();
+
+  if (!key) {
+    actionRemainingSeconds.value = null;
+    return;
+  }
+
+  actionRemainingSeconds.value = ACTION_TIMEOUT;
+  actionCountdownTimer = setInterval(() => {
+    if (actionRemainingSeconds.value === null) return;
+    actionRemainingSeconds.value = Math.max(0, actionRemainingSeconds.value - 1);
+  }, 1000);
+});
+
+function stopActionCountdown() {
+  if (!actionCountdownTimer) return;
+
+  clearInterval(actionCountdownTimer);
+  actionCountdownTimer = null;
+}
 
 function handleSelectSeat(seatNumber: number) {
   socketService.selectSeat(roomCode.value, seatNumber);
@@ -323,77 +362,12 @@ h2 {
   align-items: center;
 }
 
-.table-status {
-  position: absolute;
-  left: 50%;
-  bottom: 6px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.table-status > * {
-  pointer-events: auto;
-}
-
 .control-zone {
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   overflow: hidden;
-}
-
-.ready-btn {
-  min-height: 44px;
-  padding: 10px 34px;
-  font-size: 16px;
-  font-weight: bold;
-  color: #fff;
-  background: linear-gradient(135deg, #4caf50, #388e3c);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-}
-
-.ready-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.6);
-}
-
-.ready-btn:active {
-  transform: scale(0.98);
-}
-
-.waiting-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 8px;
-  color: #aaa;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.waiting-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ffc107;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.4; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.2); }
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
@@ -426,15 +400,6 @@ h2 {
     gap: 6px;
   }
 
-  .table-status {
-    bottom: 4px;
-  }
-
-  .ready-btn {
-    min-height: 38px;
-    padding: 8px 24px;
-    font-size: 14px;
-  }
 }
 
 @media (orientation: portrait) {
@@ -451,10 +416,5 @@ h2 {
     min-height: 420px;
   }
 
-  .table-status {
-    position: static;
-    margin-top: -38px;
-    transform: none;
-  }
 }
 </style>

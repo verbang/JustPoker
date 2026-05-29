@@ -8,6 +8,12 @@
       'is-out': player.status === 'out'
     }"
   >
+    <div
+      v-if="isCurrentPlayer && actionProgress !== null"
+      class="action-ring"
+      :style="{ '--action-progress': `${actionProgress}deg` }"
+    ></div>
+
     <!-- Floating emojis -->
     <div class="emoji-container">
       <transition-group name="emoji-float">
@@ -21,7 +27,7 @@
 
     <!-- Position badges (D / SB / BB) -->
     <div class="position-badges">
-      <span v-if="player.isDealer" class="badge dealer">D</span>
+      <span v-if="player.isDealer" class="badge dealer">BTN</span>
       <span v-if="player.isSmallBlind" class="badge sb">SB</span>
       <span v-if="player.isBigBlind" class="badge bb">BB</span>
     </div>
@@ -32,8 +38,14 @@
     </div>
 
     <div class="player-info">
+      <span v-if="isCurrentPlayer && actionRemainingSeconds !== null" class="action-countdown">
+        {{ actionRemainingSeconds }}
+      </span>
       <span class="nickname" @click="handleTip">{{ player.nickname }}</span>
       <span class="chips">&#x1F4B0; {{ player.chips }}</span>
+      <span v-if="seatStatusText" class="seat-status" :class="`status-${player.status}`">
+        {{ seatStatusText }}
+      </span>
     </div>
 
     <!-- My cards (face up) -->
@@ -57,6 +69,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { Card, Suit } from '../../../../shared/types/game.types';
 
 const props = defineProps<{
@@ -74,11 +87,26 @@ const props = defineProps<{
   isWinner?: boolean;
   myCards?: Card[];
   emojis?: { id: number; userId: string; emoji: string }[];
+  actionRemainingSeconds?: number | null;
 }>();
 
 const emit = defineEmits<{
   (e: 'tip'): void;
 }>();
+
+const seatStatusText = computed(() => {
+  if (props.player.status === 'seated') return '未准备';
+  if (props.player.status === 'ready') return '已准备';
+  return '';
+});
+
+const actionProgress = computed(() => {
+  if (!props.isCurrentPlayer || props.actionRemainingSeconds === null || props.actionRemainingSeconds === undefined) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(360, (props.actionRemainingSeconds / 60) * 360));
+});
 
 function getSuitSymbol(suit: Suit): string {
   const symbols: Record<Suit, string> = {
@@ -110,6 +138,7 @@ function handleTip() {
   transition: all 0.3s ease;
   min-width: 80px;
   max-width: 110px;
+  border: 2px solid transparent;
 }
 
 .player-seat.is-me {
@@ -118,8 +147,10 @@ function handleTip() {
 }
 
 .player-seat.is-current {
-  border: 2px solid #ffeb3b;
-  box-shadow: 0 0 12px rgba(255, 235, 59, 0.5);
+  border-color: #ffeb3b;
+  box-shadow:
+    0 0 0 2px rgba(255, 235, 59, 0.4),
+    0 0 18px rgba(255, 235, 59, 0.8);
 }
 
 .player-seat.is-folded {
@@ -128,6 +159,24 @@ function handleTip() {
 
 .player-seat.is-out {
   opacity: 0.3;
+}
+
+.action-ring {
+  position: absolute;
+  inset: -7px;
+  border-radius: 14px;
+  background:
+    conic-gradient(from -90deg, #ffeb3b var(--action-progress), rgba(255, 235, 59, 0.08) 0);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.action-ring::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.74);
 }
 
 /* Position badges */
@@ -211,10 +260,29 @@ function handleTip() {
 
 /* Player info */
 .player-info {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
+}
+
+.action-countdown {
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  min-width: 30px;
+  padding: 2px 7px;
+  transform: translateX(-50%);
+  border: 2px solid #ffeb3b;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #ffeb3b;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.25;
+  text-align: center;
+  box-shadow: 0 0 10px rgba(255, 235, 59, 0.55);
 }
 
 .nickname {
@@ -237,6 +305,24 @@ function handleTip() {
   font-size: 13px;
   color: #ffd700;
   font-weight: bold;
+}
+
+.seat-status {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 1.4;
+}
+
+.seat-status.status-seated {
+  color: #ffd54f;
+  background: rgba(255, 213, 79, 0.16);
+}
+
+.seat-status.status-ready {
+  color: #8ee59a;
+  background: rgba(76, 175, 80, 0.18);
 }
 
 /* Cards */
@@ -285,6 +371,16 @@ function handleTip() {
     border-width: 1px;
   }
 
+  .action-ring {
+    inset: -5px;
+    border-radius: 10px;
+  }
+
+  .action-ring::after {
+    inset: 4px;
+    border-radius: 7px;
+  }
+
   .position-badges {
     gap: 2px;
     margin-bottom: 0;
@@ -304,8 +400,21 @@ function handleTip() {
     font-size: 13px;
   }
 
+  .action-countdown {
+    top: -21px;
+    min-width: 24px;
+    padding: 1px 5px;
+    border-width: 1px;
+    font-size: 12px;
+  }
+
   .chips {
     font-size: 11px;
+  }
+
+  .seat-status {
+    padding: 1px 4px;
+    font-size: 9px;
   }
 
   .cards {

@@ -30,7 +30,7 @@ export const PLAYER_ACTIONS = ['fold', 'check', 'call', 'bet', 'raise', 'all_in'
 export const MAX_SEATS = 10;
 
 // 操作超时时间（秒）
-export const ACTION_TIMEOUT = 30;
+export const ACTION_TIMEOUT = 60;
 
 // 表情系统
 export const EMOJIS = ['👍', '🎉', '😮', '😢', '😡', '🤔', '💰', '🃏', '🍀', '😎', '🙏', '⏰'] as const;

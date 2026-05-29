@@ -14,9 +14,30 @@
         :is-winner="winnerIds.includes(player.userId)"
         :my-cards="player.userId === userId ? myCards : []"
         :emojis="getPlayerEmojis(player.userId)"
+        :action-remaining-seconds="player.seatNumber === currentSeatNumber ? actionRemainingSeconds : null"
         :style="getSeatStyle(displayIndex, displayPlayers.length)"
         @tip="$emit('tip', player)"
       />
+
+      <div
+        v-if="mySeatOverlayStyle"
+        class="my-seat-overlay"
+        :style="mySeatOverlayStyle"
+      >
+        <button
+          v-if="showReadyButton"
+          class="ready-btn"
+          type="button"
+          @click="$emit('ready')"
+        >
+          准备
+        </button>
+        <HandDisplay
+          v-if="handHoleCards.length && handCommunityCards.length"
+          :hole-cards="handHoleCards"
+          :community-cards="handCommunityCards"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -25,6 +46,7 @@
 import { computed } from 'vue';
 import PlayerSeat from './PlayerSeat.vue';
 import CommunityCards from './CommunityCards.vue';
+import HandDisplay from './HandDisplay.vue';
 import type { Card, GamePlayer } from '../../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../../shared/types/room.types';
 
@@ -45,13 +67,21 @@ const props = defineProps<{
   winnerId?: string;
   winnerIds?: string[];
   activeEmojis: { id: number; userId: string; emoji: string }[];
+  actionRemainingSeconds?: number | null;
+  showReadyButton?: boolean;
+  handHoleCards?: Card[];
+  handCommunityCards?: Card[];
 }>();
 
 const winnerIds = computed(() => props.winnerIds || (props.winnerId ? [props.winnerId] : []));
 
 defineEmits<{
   (e: 'tip', player: TablePlayer): void;
+  (e: 'ready'): void;
 }>();
+
+const handHoleCards = computed(() => props.handHoleCards ?? []);
+const handCommunityCards = computed(() => props.handCommunityCards ?? []);
 
 function getPlayerEmojis(userId: string) {
   return props.activeEmojis.filter(e => e.userId === userId);
@@ -91,6 +121,13 @@ const displayPlayers = computed(() => {
   return result;
 });
 
+const mySeatOverlayStyle = computed(() => {
+  const myDisplayIndex = displayPlayers.value.findIndex(p => p.userId === props.userId);
+  if (myDisplayIndex === -1) return null;
+
+  return getSeatOverlayStyle(myDisplayIndex, displayPlayers.value.length);
+});
+
 /**
  * Position seats in a first-person oval layout.
  * Index 0 (me) = bottom center (6 o'clock).
@@ -123,6 +160,14 @@ function getSeatStyle(displayIndex: number, total: number) {
     left: `${x}%`,
     top: `${y}%`,
     transform: 'translate(-50%, -50%)',
+  };
+}
+
+function getSeatOverlayStyle(displayIndex: number, total: number) {
+  const seatStyle = getSeatStyle(displayIndex, total);
+  return {
+    ...seatStyle,
+    top: `calc(${seatStyle.top} + 82px)`,
   };
 }
 </script>
@@ -168,6 +213,40 @@ function getSeatStyle(displayIndex: number, total: number) {
   height: 100%;
 }
 
+.my-seat-overlay {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: min(280px, 80vw);
+}
+
+.ready-btn {
+  min-height: 38px;
+  padding: 8px 28px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #fff;
+  background: linear-gradient(135deg, #4caf50, #388e3c);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.ready-btn:hover {
+  transform: scale(1.04);
+  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.6);
+}
+
+.ready-btn:active {
+  transform: scale(0.98);
+}
+
 @media (orientation: landscape) and (max-width: 900px) {
   .game-table {
     height: 100%;
@@ -185,6 +264,17 @@ function getSeatStyle(displayIndex: number, total: number) {
 
   .pot {
     font-size: 13px;
+  }
+
+  .my-seat-overlay {
+    gap: 4px;
+  }
+
+  .ready-btn {
+    min-height: 30px;
+    padding: 5px 18px;
+    font-size: 12px;
+    border-radius: 6px;
   }
 }
 

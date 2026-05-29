@@ -12,6 +12,7 @@ export interface CreateRoomResponse {
   roomCode: string;
   roomId: string;
   userId: string;
+  actionTimeoutEnabled: boolean;
 }
 
 export interface JoinRoomResponse {
@@ -27,6 +28,7 @@ export interface RoomInfo {
     hostId: string;
     status: string;
     initialChips: number;
+    actionTimeoutEnabled: boolean;
   };
   players: Array<{
     userId: string;
@@ -38,8 +40,8 @@ export interface RoomInfo {
 }
 
 export const roomApi = {
-  createRoom: (nickname: string, initialChips: number, password?: string) =>
-    api.post<CreateRoomResponse>('/rooms', { nickname, initialChips, password }),
+  createRoom: (nickname: string, initialChips: number, password?: string, actionTimeoutEnabled = false) =>
+    api.post<CreateRoomResponse>('/rooms', { nickname, initialChips, password, actionTimeoutEnabled }),
 
   joinRoom: (roomCode: string, nickname: string, chips: number, password?: string) =>
     api.post<JoinRoomResponse>(`/rooms/${roomCode}/join`, { nickname, chips, password }),

@@ -15,6 +15,7 @@ export class RoomManager {
   private roomPlayers: Map<string, Map<string, RoomPlayer>> = new Map();
   private roomLastActivity: Map<string, number> = new Map();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private onRoomDeleted: ((roomCode: string) => void) | null = null;
 
   constructor() {
     this.startCleanupTimer();
@@ -47,12 +48,16 @@ export class RoomManager {
       }
     }
 
-    // 删除空房间
+    // 删除空房间，并通知外部清理关联资源
     for (const roomCode of roomsToDelete) {
       this.rooms.delete(roomCode);
       this.roomPlayers.delete(roomCode);
       this.roomLastActivity.delete(roomCode);
       logger.info(`已清理空房间: ${roomCode}`);
+
+      if (this.onRoomDeleted) {
+        this.onRoomDeleted(roomCode);
+      }
     }
 
     if (roomsToDelete.length > 0) {
@@ -67,7 +72,13 @@ export class RoomManager {
     this.roomLastActivity.set(roomCode, Date.now());
   }
 
-  createRoom(hostId: string, hostNickname: string, initialChips: number, password?: string): Room | null {
+  createRoom(
+    hostId: string,
+    hostNickname: string,
+    initialChips: number,
+    password?: string,
+    actionTimeoutEnabled = false
+  ): Room | null {
     const roomCode = this.generateRoomCode();
     if (!roomCode) return null;
 
@@ -79,6 +90,7 @@ export class RoomManager {
       smallBlind: 5,
       bigBlind: 10,
       initialChips,
+      actionTimeoutEnabled,
       password: password || undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -118,10 +130,8 @@ export class RoomManager {
     const players = this.roomPlayers.get(roomCode)!;
 
     // Check if nickname exists
-    for (const player of players.values()) {
-      if (player.nickname === nickname) {
-        return null; // Nickname already exists
-      }
+    if (this.hasNickname(roomCode, nickname)) {
+      return null; // Nickname already exists
     }
 
     const player: RoomPlayer = {
@@ -138,6 +148,20 @@ export class RoomManager {
     players.set(userId, player);
     this.updateRoomActivity(roomCode);
     return player;
+  }
+
+  hasNickname(roomCode: string, nickname: string): boolean {
+    const players = this.roomPlayers.get(roomCode);
+    if (!players) return false;
+
+    const normalizedNickname = nickname.trim();
+    return Array.from(players.values()).some(player => player.nickname.trim() === normalizedNickname);
+  }
+
+  isPasswordValid(roomCode: string, password?: string): boolean {
+    const room = this.rooms.get(roomCode);
+    if (!room) return false;
+    return !room.password || room.password === password;
   }
 
   selectSeat(roomCode: string, userId: string, seatNumber: number): boolean {
@@ -254,5 +278,13 @@ export class RoomManager {
       this.cleanupTimer = null;
       logger.info('空房间清理定时器已停止');
     }
+  }
+
+  /**
+   * 注册房间删除回调。
+   * 当清理定时器删除空房间时，会调用此回调通知外部（如 SocketService）同步清理关联资源。
+   */
+  setOnRoomDeleted(callback: (roomCode: string) => void): void {
+    this.onRoomDeleted = callback;
   }
 }

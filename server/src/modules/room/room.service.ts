@@ -11,7 +11,13 @@ export class RoomService {
   }
 
   async createRoom(hostId: string, request: CreateRoomRequest): Promise<Room | null> {
-    const room = this.roomManager.createRoom(hostId, request.nickname, request.initialChips, request.password);
+    const room = this.roomManager.createRoom(
+      hostId,
+      request.nickname,
+      request.initialChips,
+      request.password,
+      request.actionTimeoutEnabled ?? false
+    );
     if (!room) return null;
 
     // Save to database if available
@@ -23,6 +29,7 @@ export class RoomService {
       small_blind: room.smallBlind,
       big_blind: room.bigBlind,
       initial_chips: room.initialChips,
+      action_timeout_enabled: room.actionTimeoutEnabled,
     });
 
     logger.info(`Room created: ${room.roomCode}`);
@@ -53,6 +60,14 @@ export class RoomService {
 
   getRoomPlayers(roomCode: string): RoomPlayer[] {
     return this.roomManager.getRoomPlayers(roomCode);
+  }
+
+  hasNickname(roomCode: string, nickname: string): boolean {
+    return this.roomManager.hasNickname(roomCode, nickname);
+  }
+
+  isPasswordValid(roomCode: string, password?: string): boolean {
+    return this.roomManager.isPasswordValid(roomCode, password);
   }
 
   getSeatedPlayers(roomCode: string): RoomPlayer[] {

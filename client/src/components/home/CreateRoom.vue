@@ -20,9 +20,15 @@
         type="text"
         placeholder="4位数字，留空则无密码"
         maxlength="4"
-        @input="password = password.replace(/\D/g, '')"
+        inputmode="numeric"
+        @input="handlePasswordInput"
       />
+      <span v-if="passwordError" class="field-error">{{ passwordError }}</span>
     </div>
+    <label class="toggle-field">
+      <input v-model="actionTimeoutEnabled" type="checkbox" />
+      <span>行动倒计时</span>
+    </label>
     <button :disabled="!isNicknameValid" @click="createRoom">创建房间</button>
   </div>
 </template>
@@ -43,15 +49,39 @@ const roomStore = useRoomStore();
 const nickname = ref('');
 const initialChips = ref(100);
 const password = ref('');
+const actionTimeoutEnabled = ref(false);
 const isNicknameValid = ref(false);
+const passwordError = ref('');
+
+function handlePasswordInput() {
+  password.value = password.value.replace(/\D/g, '').slice(0, 4);
+  validatePassword();
+}
+
+function validatePassword() {
+  passwordError.value = '';
+  if (!password.value) return;
+
+  if (!/^\d{0,4}$/.test(password.value) || password.value.length !== 4) {
+    passwordError.value = '密码仅支持4位纯数字';
+  }
+}
 
 async function createRoom() {
+  validatePassword();
+  if (passwordError.value) return;
+
   try {
-    const response = await roomApi.createRoom(nickname.value, initialChips.value, password.value || undefined);
+    const response = await roomApi.createRoom(
+      nickname.value,
+      initialChips.value,
+      password.value || undefined,
+      actionTimeoutEnabled.value
+    );
     const { roomCode, roomId, userId } = response.data;
 
     userStore.setUser(userId, nickname.value);
-    roomStore.setRoom(roomCode, roomId, initialChips.value);
+    roomStore.setRoom(roomCode, roomId, initialChips.value, actionTimeoutEnabled.value);
 
     router.push(`/room/${roomCode}`);
   } catch (error) {
@@ -88,5 +118,26 @@ async function createRoom() {
 
 .password-field input::placeholder {
   color: #777;
+}
+
+.field-error {
+  color: #ff6b6b;
+  font-size: 13px;
+}
+
+.toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ddd;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: #4caf50;
 }
 </style>

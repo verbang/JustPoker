@@ -19,12 +19,13 @@ describe('PotCalculator', () => {
 
   test('should calculate simple pot', () => {
     const players = [
-      createPlayer({ totalBet: 100 }),
-      createPlayer({ totalBet: 100 }),
-      createPlayer({ totalBet: 100 }),
+      createPlayer({ userId: '1', totalBet: 100 }),
+      createPlayer({ userId: '2', totalBet: 100 }),
+      createPlayer({ userId: '3', totalBet: 100 }),
     ];
     const result = PotCalculator.calculatePots(players);
     expect(result.mainPot).toBe(300);
+    expect(result.mainPotEligiblePlayerIds).toEqual(['1', '2', '3']);
     expect(result.sidePots).toHaveLength(0);
   });
 
@@ -36,6 +37,7 @@ describe('PotCalculator', () => {
     ];
     const result = PotCalculator.calculatePots(players);
     expect(result.mainPot).toBe(150); // 50 * 3
+    expect(result.mainPotEligiblePlayerIds).toEqual(['1', '2', '3']);
     expect(result.sidePots).toHaveLength(1);
     expect(result.sidePots[0].amount).toBe(100); // 50 * 2
     expect(result.sidePots[0].eligiblePlayerIds).toEqual(['2', '3']);
@@ -49,6 +51,7 @@ describe('PotCalculator', () => {
     ];
     const result = PotCalculator.calculatePots(players);
     expect(result.mainPot).toBe(150); // 50 * 3
+    expect(result.mainPotEligiblePlayerIds).toEqual(['1', '2', '3']);
     expect(result.sidePots).toHaveLength(2);
     expect(result.sidePots[0].amount).toBe(100); // 50 * 2
     expect(result.sidePots[0].eligiblePlayerIds).toEqual(['2', '3']);
@@ -64,6 +67,20 @@ describe('PotCalculator', () => {
     ];
     const result = PotCalculator.calculatePots(players);
     expect(result.mainPot).toBe(300);
+    expect(result.mainPotEligiblePlayerIds).toEqual(['2', '3']);
+  });
+
+  test('should keep folded chips in pots but exclude folded players from eligibility', () => {
+    const players = [
+      createPlayer({ userId: '1', totalBet: 100, status: 'folded' }),
+      createPlayer({ userId: '2', totalBet: 50, status: 'all_in' }),
+      createPlayer({ userId: '3', totalBet: 50, status: 'all_in' }),
+    ];
+    const result = PotCalculator.calculatePots(players);
+
+    expect(result.mainPot).toBe(200);
+    expect(result.mainPotEligiblePlayerIds).toEqual(['2', '3']);
+    expect(result.sidePots).toHaveLength(0);
   });
 
   test('should distribute winnings to single winner', () => {

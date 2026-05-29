@@ -20,13 +20,13 @@
       跟注 {{ callAmount }}
     </button>
     <button class="action-btn raise" @click="emitBetOrRaise" :disabled="!isMyTurn || !canRaise">
-      {{ raiseLabel }} {{ raiseAmount }}
+      {{ raiseLabel }} {{ displayedRaiseAmount }}
     </button>
     <input
       type="range"
       v-model.number="raiseAmount"
       :min="raiseMin"
-      :max="maxChips"
+      :max="raiseSliderMax"
       :disabled="!canRaise"
       class="raise-slider"
     />
@@ -44,6 +44,7 @@ const props = defineProps<{
   currentBet: number;
   myBet: number;
   minRaise: number;
+  minRaiseTo?: number;
   maxChips: number;
 }>();
 
@@ -56,15 +57,18 @@ const emit = defineEmits<{
   (e: 'all-in'): void;
 }>();
 
-const raiseAmount = ref(Math.min(props.currentBet + props.minRaise, props.maxChips));
-
 const canCheck = computed(() => props.myBet >= props.currentBet);
 const callAmount = computed(() => props.currentBet - props.myBet);
-const raiseMin = computed(() => props.currentBet + props.minRaise);
+const raiseMin = computed(() => props.minRaiseTo ?? props.currentBet + props.minRaise);
 const canRaise = computed(() => props.maxChips >= raiseMin.value);
 const raiseLabel = computed(() => props.currentBet === 0 ? '下注' : '加注');
+const raiseAmount = ref(raiseMin.value);
+const displayedRaiseAmount = computed(() => canRaise.value ? raiseAmount.value : raiseMin.value);
+const raiseSliderMax = computed(() => canRaise.value ? props.maxChips : raiseMin.value);
 
 function emitBetOrRaise() {
+  if (!canRaise.value) return;
+
   if (props.currentBet === 0) {
     emit('bet', raiseAmount.value);
   } else {
@@ -73,9 +77,12 @@ function emitBetOrRaise() {
 }
 
 watch(
-  () => [props.currentBet, props.minRaise],
+  () => [props.currentBet, props.minRaise, props.minRaiseTo, props.maxChips],
   () => {
-    raiseAmount.value = Math.min(props.currentBet + props.minRaise, props.maxChips);
+    raiseAmount.value = canRaise.value ? Math.max(raiseAmount.value, raiseMin.value) : raiseMin.value;
+    if (canRaise.value && raiseAmount.value > props.maxChips) {
+      raiseAmount.value = props.maxChips;
+    }
   }
 );
 </script>

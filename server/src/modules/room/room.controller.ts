@@ -8,7 +8,7 @@ const router = Router();
 // Create room
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { nickname, initialChips, password }: CreateRoomRequest = req.body;
+    const { nickname, initialChips, password, actionTimeoutEnabled }: CreateRoomRequest = req.body;
 
     if (!nickname || !Number.isInteger(initialChips) || initialChips <= 0) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -20,7 +20,12 @@ router.post('/', async (req: Request, res: Response) => {
 
     // Generate unique userId using uuid
     const userId = uuidv4();
-    const room = await roomService.createRoom(userId, { nickname, initialChips, password });
+    const room = await roomService.createRoom(userId, {
+      nickname,
+      initialChips,
+      password,
+      actionTimeoutEnabled: actionTimeoutEnabled ?? false,
+    });
     if (!room) {
       return res.status(503).json({ error: '房间已满，请稍后再试！' });
     }
@@ -29,6 +34,7 @@ router.post('/', async (req: Request, res: Response) => {
       roomCode: room.roomCode,
       roomId: room.id,
       userId,
+      actionTimeoutEnabled: room.actionTimeoutEnabled,
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create room' });
@@ -45,12 +51,25 @@ router.post('/:roomCode/join', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    const room = roomService.getRoom(roomCode);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    if (roomService.hasNickname(roomCode, nickname)) {
+      return res.status(409).json({ error: '昵称重复' });
+    }
+
+    if (!roomService.isPasswordValid(roomCode, password)) {
+      return res.status(403).json({ error: '房间密码错误' });
+    }
+
     // Generate unique userId for the joining player
     const userId = uuidv4();
     const player = await roomService.joinRoom(roomCode, userId, nickname, chips, password);
 
     if (!player) {
-      return res.status(404).json({ error: 'Room not found, wrong password, or nickname exists' });
+      return res.status(403).json({ error: 'Room not found or wrong password' });
     }
 
     res.json({
@@ -84,6 +103,7 @@ router.get('/:roomCode', (req: Request, res: Response) => {
       smallBlind: room.smallBlind,
       bigBlind: room.bigBlind,
       initialChips: room.initialChips,
+      actionTimeoutEnabled: room.actionTimeoutEnabled,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
     };

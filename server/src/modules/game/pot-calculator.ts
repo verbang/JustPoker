@@ -2,6 +2,7 @@ import { GamePlayer, SidePot } from '../../../../shared/types/game.types';
 
 export interface PotResult {
   mainPot: number;
+  mainPotEligiblePlayerIds: string[];
   sidePots: SidePot[];
 }
 
@@ -15,14 +16,13 @@ export class PotCalculator {
     const allPlayers = players.filter(p => p.totalBet > 0);
 
     if (allPlayers.length === 0) {
-      return { mainPot: 0, sidePots: [] };
+      return { mainPot: 0, mainPotEligiblePlayerIds: [], sidePots: [] };
     }
 
     // Sort players by total bet
     const sortedByBet = [...allPlayers].sort((a, b) => a.totalBet - b.totalBet);
 
-    let mainPot = 0;
-    const sidePots: SidePot[] = [];
+    const layerPots: Pot[] = [];
     let processedBet = 0;
 
     for (let i = 0; i < sortedByBet.length; i++) {
@@ -34,20 +34,29 @@ export class PotCalculator {
       // Count eligible players at this level
       const eligiblePlayers = sortedByBet.slice(i);
       const potAmount = betDiff * eligiblePlayers.length;
+      const eligiblePlayerIds = eligiblePlayers
+        .filter(p => p.status !== 'folded' && p.status !== 'out')
+        .map(p => p.userId);
 
-      if (i === 0) {
-        mainPot = potAmount;
+      if (eligiblePlayerIds.length === 0 && layerPots.length > 0) {
+        layerPots[layerPots.length - 1].amount += potAmount;
       } else {
-        sidePots.push({
+        layerPots.push({
           amount: potAmount,
-          eligiblePlayerIds: eligiblePlayers.map(p => p.userId)
+          eligiblePlayerIds,
         });
       }
 
       processedBet = player.totalBet;
     }
 
-    return { mainPot, sidePots };
+    const mainPot = layerPots[0];
+
+    return {
+      mainPot: mainPot?.amount ?? 0,
+      mainPotEligiblePlayerIds: mainPot?.eligiblePlayerIds ?? [],
+      sidePots: layerPots.slice(1),
+    };
   }
 
   static distributeWinnings(

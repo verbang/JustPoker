@@ -43,6 +43,35 @@ describe('RoomManager', () => {
     expect(player).toBeNull();
   });
 
+  test('should reject duplicate nickname in the same room', () => {
+    const room = createTestRoom();
+    const player = manager.joinRoom(room.roomCode, 'user1', 'Host', 100);
+
+    expect(player).toBeNull();
+    expect(manager.hasNickname(room.roomCode, 'Host')).toBe(true);
+  });
+
+  test('should validate room password', () => {
+    const room = manager.createRoom('host1', 'Host', 100, '1234');
+    if (!room) throw new Error('测试房间创建失败');
+
+    expect(manager.isPasswordValid(room.roomCode, '1234')).toBe(true);
+    expect(manager.isPasswordValid(room.roomCode, '0000')).toBe(false);
+  });
+
+  test('should create rooms with action timeout disabled by default', () => {
+    const room = createTestRoom();
+
+    expect(room.actionTimeoutEnabled).toBe(false);
+  });
+
+  test('should create rooms with action timeout enabled when requested', () => {
+    const room = manager.createRoom('host1', 'Host', 100, undefined, true);
+    if (!room) throw new Error('测试房间创建失败');
+
+    expect(room.actionTimeoutEnabled).toBe(true);
+  });
+
   test('should select a seat', () => {
     const room = createTestRoom();
     manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);

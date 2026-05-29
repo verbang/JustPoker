@@ -49,6 +49,7 @@ export interface GameState {
   bigBlindIndex: number;
   currentBet: number;
   minRaise: number;
+  minRaiseTo: number;
   players: GamePlayer[];
   sidePots: SidePot[];
   status: 'waiting' | 'playing' | 'finished';

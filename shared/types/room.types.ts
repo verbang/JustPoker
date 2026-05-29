@@ -13,6 +13,7 @@ export interface Room {
   smallBlind: number;
   bigBlind: number;
   initialChips: number;
+  actionTimeoutEnabled: boolean;
   password?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +35,7 @@ export interface RoomPlayer {
 export interface CreateRoomRequest {
   nickname: string;
   initialChips: number;
+  actionTimeoutEnabled?: boolean;
   password?: string;
 }
 

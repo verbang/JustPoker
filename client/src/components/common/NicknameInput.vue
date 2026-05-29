@@ -52,8 +52,10 @@ function validate() {
     return;
   }
 
-  if (props.existingNicknames?.includes(nickname.value)) {
-    error.value = '昵称已存在！';
+  const normalizedNickname = nickname.value.trim();
+  const existingNicknames = props.existingNicknames?.map(name => name.trim()) ?? [];
+  if (existingNicknames.includes(normalizedNickname)) {
+    error.value = '昵称重复';
     emit('valid', false);
     return;
   }
@@ -67,3 +69,44 @@ watch(() => props.existingNicknames, () => {
   if (nickname.value) validate();
 });
 </script>
+
+<style scoped>
+.nickname-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nickname-input label {
+  font-size: 14px;
+  color: #ccc;
+}
+
+.nickname-input input {
+  padding: 10px 12px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+}
+
+.nickname-input input:focus {
+  border-color: #4caf50;
+}
+
+.nickname-input input::placeholder {
+  color: #777;
+}
+
+.error {
+  color: #ff6b6b;
+  font-size: 13px;
+}
+
+.success {
+  color: #4caf50;
+  font-size: 13px;
+}
+</style>

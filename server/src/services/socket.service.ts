@@ -18,6 +18,7 @@ class SocketService {
   private dealerSeatNumbers: Map<string, number> = new Map();
   private countdowns: Map<string, NodeJS.Timeout> = new Map();
   private actionTimers: Map<string, NodeJS.Timeout> = new Map();
+  private reconnectTimers: Map<string, NodeJS.Timeout> = new Map();
   private userSockets: Map<string, string> = new Map();
   // 保存断线玩家的信息，用于重连恢复
   private disconnectedPlayers: Map<string, { userId: string; roomCode: string; timestamp: number }> = new Map();
@@ -48,6 +49,7 @@ class SocketService {
         if (disconnectedInfo) {
           // 重连成功，移除断线记录
           this.disconnectedPlayers.delete(disconnectedKey);
+          this.clearReconnectTimeout(disconnectedKey);
           logger.info(`玩家 ${data.userId} 重连成功`);
 
           // 通知其他玩家重连成功
@@ -61,6 +63,10 @@ class SocketService {
         const gameState = this.gameStates.get(data.roomCode);
         if (gameState) {
           this.emitToSocket(socket.id, SOCKET_EVENTS.GAME_UPDATE, gameState);
+          const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+          if (disconnectedInfo && gameState.status === 'playing' && currentPlayer?.userId === data.userId) {
+            this.scheduleActionTimeout(data.roomCode, gameState);
+          }
         }
       });
 
@@ -151,16 +157,25 @@ class SocketService {
               });
               logger.info(`玩家 ${userId} 在游戏中断线，等待重连...`);
 
+              const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+              if (currentPlayer?.userId === userId) {
+                this.clearActionTimeout(roomCode);
+              }
+
               // 设置重连超时
-              setTimeout(() => {
-                const disconnectedInfo = this.disconnectedPlayers.get(`${roomCode}:${userId}`);
+              const disconnectedKey = `${roomCode}:${userId}`;
+              this.clearReconnectTimeout(disconnectedKey);
+              const reconnectTimer = setTimeout(() => {
+                const disconnectedInfo = this.disconnectedPlayers.get(disconnectedKey);
                 if (disconnectedInfo) {
                   // 超时未重连，自动弃牌
                   logger.info(`玩家 ${userId} 重连超时，自动弃牌`);
-                  this.disconnectedPlayers.delete(`${roomCode}:${userId}`);
+                  this.disconnectedPlayers.delete(disconnectedKey);
+                  this.reconnectTimers.delete(disconnectedKey);
                   this.handlePlayerDisconnect(roomCode, userId);
                 }
               }, this.RECONNECT_TIMEOUT_MS);
+              this.reconnectTimers.set(disconnectedKey, reconnectTimer);
 
               // 通知其他玩家有玩家断线
               this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId, reconnecting: true });
@@ -172,6 +187,11 @@ class SocketService {
           this.handlePlayerLeaveRoom(roomCode, userId);
         }
       });
+    });
+
+    // 注册房间删除回调，确保空房间被清理时同步清理关联的游戏状态
+    roomService.getRoomManager().setOnRoomDeleted((roomCode: string) => {
+      this.cleanupRoomGameState(roomCode);
     });
 
     logger.info('Socket.io initialized');
@@ -344,6 +364,9 @@ class SocketService {
 
     if (gameState.status !== 'playing') return;
 
+    const room = roomService.getRoom(roomCode);
+    if (!room?.actionTimeoutEnabled) return;
+
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     if (!currentPlayer || currentPlayer.status !== 'playing') return;
 
@@ -360,6 +383,14 @@ class SocketService {
 
     clearTimeout(timer);
     this.actionTimers.delete(roomCode);
+  }
+
+  private clearReconnectTimeout(disconnectedKey: string): void {
+    const timer = this.reconnectTimers.get(disconnectedKey);
+    if (!timer) return;
+
+    clearTimeout(timer);
+    this.reconnectTimers.delete(disconnectedKey);
   }
 
   private handleActionTimeout(roomCode: string, userId: string): void {
@@ -417,6 +448,12 @@ class SocketService {
     if (gameState) {
       const player = gameState.players.find(p => p.userId === userId);
       if (player && player.status === 'playing') {
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        const wasCurrentPlayer = currentPlayer?.userId === userId;
+        if (currentPlayer?.userId === userId) {
+          this.clearActionTimeout(roomCode);
+        }
+
         // 自动弃牌
         try {
           const engine = this.gameEngines.get(roomCode);
@@ -427,7 +464,7 @@ class SocketService {
 
             if (newState.status === 'finished') {
               this.handleGameFinished(roomCode, newState);
-            } else {
+            } else if (wasCurrentPlayer) {
               this.scheduleActionTimeout(roomCode, newState);
             }
           }
@@ -449,6 +486,33 @@ class SocketService {
     const players = roomService.getRoomPlayers(roomCode);
     this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
     this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId });
+  }
+
+  /**
+   * 清理与房间关联的所有游戏状态。
+   * 由 RoomManager 的房间删除回调触发，防止内存泄漏。
+   */
+  private cleanupRoomGameState(roomCode: string): void {
+    this.clearActionTimeout(roomCode);
+    this.gameEngines.delete(roomCode);
+    this.gameStates.delete(roomCode);
+    this.dealerSeatNumbers.delete(roomCode);
+
+    const countdown = this.countdowns.get(roomCode);
+    if (countdown) {
+      clearInterval(countdown);
+      this.countdowns.delete(roomCode);
+    }
+
+    // 清理该房间下所有断线玩家的记录
+    for (const [key] of this.disconnectedPlayers) {
+      if (key.startsWith(`${roomCode}:`)) {
+        this.disconnectedPlayers.delete(key);
+        this.clearReconnectTimeout(key);
+      }
+    }
+
+    logger.info(`已清理房间 ${roomCode} 的关联游戏状态`);
   }
 }
 

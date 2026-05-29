@@ -69,7 +69,7 @@ describe('GameEngine', () => {
     });
   });
 
-  test('should deal hole cards one at a time from small blind', () => {
+  test('should deal hole cards one at a time from dealer left in multi-way hand', () => {
     const players = [
       createPlayer({ userId: '1', seatNumber: 1 }),
       createPlayer({ userId: '2', seatNumber: 2 }),
@@ -81,6 +81,17 @@ describe('GameEngine', () => {
     expect(state.players[1].cards).toHaveLength(2);
     expect(state.players[2].cards).toHaveLength(2);
     expect(state.players[0].cards).toHaveLength(2);
+  });
+
+  test('should deal first heads-up hole card to big blind', () => {
+    const players = [
+      createPlayer({ userId: '1', seatNumber: 1 }),
+      createPlayer({ userId: '2', seatNumber: 2 }),
+    ];
+    const state = engine.startGame('room1', players, 5, 10);
+
+    expect(state.players[state.bigBlindIndex].cards).toHaveLength(2);
+    expect(state.players[state.dealerIndex].cards).toHaveLength(2);
   });
 
   test('should handle fold action', () => {
@@ -198,7 +209,33 @@ describe('GameEngine', () => {
     state = engine.playerAction(state, '3', 'all_in');
 
     expect(state.currentBet).toBe(35);
+    expect(state.minRaise).toBe(20);
+    expect(state.minRaiseTo).toBe(50);
     expect(() => engine.playerAction(state, '1', 'raise', 55)).toThrow('Cannot raise');
+  });
+
+  test('should allow unacted player to raise from last full raise amount after incomplete all-in', () => {
+    const players = [
+      createPlayer({ userId: '1', seatNumber: 1, chips: 100 }),
+      createPlayer({ userId: '2', seatNumber: 2, chips: 100 }),
+      createPlayer({ userId: '3', seatNumber: 3, chips: 100 }),
+      createPlayer({ userId: '4', seatNumber: 4, chips: 100 }),
+    ];
+    let state = engine.startGame('room1', players, 5, 10);
+    state = engine.playerAction(state, '4', 'raise', 30);
+    state = {
+      ...state,
+      players: state.players.map(p => p.userId === '1' ? { ...p, chips: 35 } : p),
+    };
+    state = engine.playerAction(state, '1', 'all_in');
+
+    expect(state.currentBet).toBe(35);
+    expect(state.minRaiseTo).toBe(50);
+
+    const result = engine.playerAction(state, '2', 'raise', 50);
+    expect(result.currentBet).toBe(50);
+    expect(result.minRaise).toBe(20);
+    expect(result.minRaiseTo).toBe(70);
   });
 
   test('should post short blinds as all-in without negative chips', () => {
@@ -229,6 +266,31 @@ describe('GameEngine', () => {
     expect(state.phase).toBe('flop');
   });
 
+  test('should skip heads-up small blind when blind post makes them all-in', () => {
+    const players = [
+      createPlayer({ userId: '1', seatNumber: 1, chips: 5 }),
+      createPlayer({ userId: '2', seatNumber: 2, chips: 100 }),
+    ];
+    const state = engine.startGame('room1', players, 5, 10);
+
+    expect(state.players[state.smallBlindIndex].status).toBe('all_in');
+    expect(state.players[state.currentPlayerIndex].userId).toBe('2');
+    expect(state.players[state.currentPlayerIndex].status).toBe('playing');
+  });
+
+  test('should run out board immediately when all players are all-in from blinds', () => {
+    const players = [
+      createPlayer({ userId: '1', seatNumber: 1, chips: 5 }),
+      createPlayer({ userId: '2', seatNumber: 2, chips: 10 }),
+    ];
+    const state = engine.startGame('room1', players, 5, 10);
+
+    expect(state.status).toBe('finished');
+    expect(state.phase).toBe('river');
+    expect(state.communityCards).toHaveLength(5);
+    expect(state.winnerId).toBeDefined();
+  });
+
   test('should progress to flop', () => {
     const players = [
       createPlayer({ userId: '1', seatNumber: 1, chips: 995 }),
@@ -242,6 +304,26 @@ describe('GameEngine', () => {
 
     expect(state.phase).toBe('flop');
     expect(state.communityCards).toHaveLength(3);
+  });
+
+  test('should burn one card before each community street', () => {
+    const players = [
+      createPlayer({ userId: '1', seatNumber: 1, chips: 995 }),
+      createPlayer({ userId: '2', seatNumber: 2, chips: 990 }),
+    ];
+    let state = engine.startGame('room1', players, 5, 10);
+
+    state = engine.playerAction(state, '1', 'call');
+    state = engine.playerAction(state, '2', 'check');
+    state = engine.playerAction(state, '2', 'check');
+    state = engine.playerAction(state, '1', 'check');
+    state = engine.playerAction(state, '2', 'check');
+    state = engine.playerAction(state, '1', 'check');
+
+    const visibleCardCount = state.players.reduce((count, player) => count + player.cards.length, 0) +
+      state.communityCards.length;
+    expect(state.phase).toBe('river');
+    expect(visibleCardCount).toBe(9);
   });
 
   test('should progress to turn', () => {
@@ -340,6 +422,7 @@ describe('GameEngine', () => {
       bigBlindIndex: 1,
       currentBet: 0,
       minRaise: 10,
+      minRaiseTo: 10,
       status: 'playing',
       sidePots: [],
       players: [
@@ -392,6 +475,7 @@ describe('GameEngine', () => {
       bigBlindIndex: 2,
       currentBet: 0,
       minRaise: 10,
+      minRaiseTo: 10,
       status: 'playing',
       sidePots: [],
       players: [
@@ -436,6 +520,71 @@ describe('GameEngine', () => {
     expect(result.players.find(p => p.userId === '3')?.chips).toBe(0);
   });
 
+  test('should award folded player excess chips to eligible showdown players', () => {
+    const communityCards: Card[] = [
+      { suit: 'hearts', rank: '2' },
+      { suit: 'clubs', rank: '7' },
+      { suit: 'diamonds', rank: '9' },
+      { suit: 'spades', rank: 'J' },
+      { suit: 'clubs', rank: 'Q' },
+    ];
+    const state: GameState = {
+      id: 'game1',
+      roomId: 'room1',
+      phase: 'river',
+      pot: 200,
+      communityCards,
+      currentPlayerIndex: 1,
+      dealerIndex: 0,
+      smallBlindIndex: 1,
+      bigBlindIndex: 2,
+      currentBet: 0,
+      minRaise: 10,
+      minRaiseTo: 10,
+      status: 'playing',
+      sidePots: [],
+      players: [
+        createPlayer({
+          userId: '1',
+          chips: 0,
+          totalBet: 100,
+          status: 'folded',
+          cards: [
+            { suit: 'hearts', rank: 'A' },
+            { suit: 'diamonds', rank: 'A' },
+          ],
+        }),
+        createPlayer({
+          userId: '2',
+          chips: 0,
+          totalBet: 50,
+          status: 'all_in',
+          cards: [
+            { suit: 'hearts', rank: 'K' },
+            { suit: 'diamonds', rank: 'K' },
+          ],
+        }),
+        createPlayer({
+          userId: '3',
+          chips: 0,
+          totalBet: 50,
+          status: 'all_in',
+          cards: [
+            { suit: 'hearts', rank: '3' },
+            { suit: 'diamonds', rank: '3' },
+          ],
+        }),
+      ],
+    };
+
+    const result = engine.playerAction(state, '2', 'check');
+
+    expect(result.status).toBe('finished');
+    expect(result.players.find(p => p.userId === '1')?.chips).toBe(0);
+    expect(result.players.find(p => p.userId === '2')?.chips).toBe(200);
+    expect(result.players.find(p => p.userId === '3')?.chips).toBe(0);
+  });
+
   test('should force fold a disconnected player outside their turn', () => {
     const players = [
       createPlayer({ userId: '1', seatNumber: 1 }),
@@ -446,5 +595,38 @@ describe('GameEngine', () => {
     const result = engine.forceFold(state, '2');
     expect(result.players[1].status).toBe('folded');
     expect(result.currentPlayerIndex).toBe(state.currentPlayerIndex);
+  });
+
+  test('should skip out players when moving to next action', () => {
+    const state: GameState = {
+      id: 'test',
+      roomId: 'room1',
+      phase: 'flop',
+      pot: 30,
+      communityCards: [
+        { suit: 'hearts', rank: '2' },
+        { suit: 'diamonds', rank: '7' },
+        { suit: 'clubs', rank: 'J' },
+      ],
+      currentPlayerIndex: 0,
+      dealerIndex: 2,
+      smallBlindIndex: 0,
+      bigBlindIndex: 1,
+      currentBet: 0,
+      minRaise: 10,
+      minRaiseTo: 10,
+      sidePots: [],
+      status: 'playing',
+      players: [
+        createPlayer({ userId: '1', seatNumber: 1, bet: 0 }),
+        createPlayer({ userId: '2', seatNumber: 2, status: 'out', bet: 0 }),
+        createPlayer({ userId: '3', seatNumber: 3, bet: 0 }),
+      ],
+    };
+
+    const result = engine.playerAction(state, '1', 'check');
+
+    expect(result.status).toBe('playing');
+    expect(result.currentPlayerIndex).toBe(2);
   });
 });

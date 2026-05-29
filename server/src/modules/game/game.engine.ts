@@ -4,22 +4,40 @@ import { Deck } from './deck';
 import { HandEvaluator } from './hand-evaluator';
 import { Pot, PotCalculator } from './pot-calculator';
 
+/**
+ * 德州扑克游戏引擎
+ *
+ * 设计约束：每个 GameEngine 实例仅用于一局游戏。
+ * - 引擎持有可变内部状态（actedPlayers、raiseLockedPlayers、deck、bigBlind），
+ *   这些状态在一局游戏的生命周期内持续更新。
+ * - startGame() 会重置所有内部状态，确保新一局从干净状态开始。
+ * - 不要在多个游戏间复用同一个 GameEngine 实例。
+ */
 export class GameEngine {
   private deck: Deck = new Deck();
   private bigBlind = 0;
   private raiseLockedPlayers: Set<string> = new Set();
 
   /**
-   * Track which players have acted in the current betting round.
-   * This is not part of GameState - it's internal engine state that
-   * needs to be threaded through playerAction calls.
+   * 记录当前下注轮中已行动过的玩家。
+   * 不属于 GameState——这是引擎内部状态，在 playerAction 调用间保持。
    */
   private actedPlayers: Set<string> = new Set();
 
-  startGame(roomId: string, players: GamePlayer[], smallBlind: number, bigBlind: number, previousDealerSeatNumber?: number): GameState {
+  /**
+   * 重置引擎内部状态，为新一局做准备。
+   * 每局游戏开始前调用，确保引擎从干净状态启动。
+   */
+  private resetEngineState(bigBlind: number): void {
     this.deck.reset();
     this.deck.shuffle();
     this.bigBlind = bigBlind;
+    this.actedPlayers = new Set();
+    this.raiseLockedPlayers = new Set();
+  }
+
+  startGame(roomId: string, players: GamePlayer[], smallBlind: number, bigBlind: number, previousDealerSeatNumber?: number): GameState {
+    this.resetEngineState(bigBlind);
 
     const isHeadsUp = players.length === 2;
 
@@ -51,18 +69,15 @@ export class GameEngine {
     const actualSmallBlind = this.postBlind(gamePlayers[smallBlindIndex], smallBlind);
     const actualBigBlind = this.postBlind(gamePlayers[bigBlindIndex], bigBlind);
 
-    this.dealHoleCards(gamePlayers, smallBlindIndex);
+    this.dealHoleCards(gamePlayers, (dealerIndex + 1) % players.length);
 
     // Determine first actor for preflop
-    const firstActorIndex = isHeadsUp
+    const preferredFirstActorIndex = isHeadsUp
       ? dealerIndex
       : (bigBlindIndex + 1) % players.length;
+    const firstActorIndex = this.findActionableIndexFrom(gamePlayers, preferredFirstActorIndex) ?? preferredFirstActorIndex;
 
-    // Reset acted tracking - blinds have not "acted" yet
-    this.actedPlayers = new Set();
-    this.raiseLockedPlayers = new Set();
-
-    return {
+    const initialState: GameState = {
       id: uuidv4(),
       roomId,
       phase: 'preflop',
@@ -74,10 +89,17 @@ export class GameEngine {
       bigBlindIndex,
       currentBet: Math.max(actualSmallBlind, actualBigBlind),
       minRaise: bigBlind,
+      minRaiseTo: Math.max(actualSmallBlind, actualBigBlind) + bigBlind,
       players: gamePlayers,
       sidePots: [],
       status: 'playing',
     };
+
+    if (this.findActionableIndexFrom(gamePlayers, firstActorIndex) === null) {
+      return this.dealRemainingCardsAndShowdown(initialState);
+    }
+
+    return initialState;
   }
 
   private getNextDealerIndex(players: GamePlayer[], previousDealerSeatNumber?: number): number {
@@ -98,6 +120,20 @@ export class GameEngine {
     return actualBlind;
   }
 
+  private findActionableIndexFrom(players: GamePlayer[], startIndex: number): number | null {
+    for (let offset = 0; offset < players.length; offset++) {
+      const playerIndex = (startIndex + offset) % players.length;
+      if (this.isActionablePlayer(players[playerIndex])) {
+        return playerIndex;
+      }
+    }
+    return null;
+  }
+
+  private isActionablePlayer(player: GamePlayer): boolean {
+    return player.status === 'playing';
+  }
+
   private dealHoleCards(players: GamePlayer[], firstPlayerIndex: number): void {
     for (let round = 0; round < 2; round++) {
       for (let offset = 0; offset < players.length; offset++) {
@@ -114,7 +150,11 @@ export class GameEngine {
   playerAction(state: GameState, userId: string, action: PlayerAction, amount?: number): GameState {
     const playerIndex = state.players.findIndex(p => p.userId === userId);
     if (playerIndex === -1) throw new Error('Player not found');
+    if (!state.players.some(p => p.status === 'playing')) {
+      return this.checkRoundComplete(state);
+    }
     if (playerIndex !== state.currentPlayerIndex) throw new Error('Not your turn');
+    if (state.players[playerIndex].status !== 'playing') throw new Error('Player cannot act');
 
     const newState: GameState = {
       ...state,
@@ -171,6 +211,7 @@ export class GameEngine {
         }
         newState.currentBet = amount;
         newState.minRaise = amount;
+        newState.minRaiseTo = amount + amount;
         newState.pot += betAmount;
         this.actedPlayers = new Set();
         this.raiseLockedPlayers = new Set();
@@ -178,7 +219,7 @@ export class GameEngine {
       }
 
       case 'raise': {
-        if (!amount || amount < state.currentBet + state.minRaise) {
+        if (!amount || amount < state.minRaiseTo) {
           throw new Error('Raise amount must be at least current bet plus minimum raise');
         }
         if (this.raiseLockedPlayers.has(userId)) {
@@ -188,6 +229,7 @@ export class GameEngine {
         if (raiseAmount > player.chips) {
           throw new Error('Not enough chips to raise');
         }
+        const fullRaiseAmount = amount - this.getLastFullRaiseBet(state);
         player.chips -= raiseAmount;
         player.bet = amount;
         player.totalBet += raiseAmount;
@@ -195,7 +237,8 @@ export class GameEngine {
           player.status = 'all_in';
         }
         newState.currentBet = amount;
-        newState.minRaise = amount - state.currentBet;
+        newState.minRaise = fullRaiseAmount;
+        newState.minRaiseTo = amount + newState.minRaise;
         newState.pot += raiseAmount;
         // Reset acted tracking - everyone needs to act again after a raise
         this.actedPlayers = new Set();
@@ -215,13 +258,15 @@ export class GameEngine {
         player.status = 'all_in';
         newState.pot += allInAmount;
 
+        const fullRaiseAmount = player.bet - this.getLastFullRaiseBet(state);
         const allInRaise = player.bet - state.currentBet;
         // 只有完整加注才会重新开放行动权
         if (player.bet > state.currentBet) {
           newState.currentBet = player.bet;
         }
-        if (allInRaise >= state.minRaise) {
-          newState.minRaise = allInRaise;
+        if (player.bet >= state.minRaiseTo) {
+          newState.minRaise = fullRaiseAmount;
+          newState.minRaiseTo = player.bet + fullRaiseAmount;
           // 重置 acted tracking - 加注后其他玩家需要重新行动
           this.actedPlayers = new Set();
           this.raiseLockedPlayers = new Set();
@@ -239,6 +284,10 @@ export class GameEngine {
 
     // Check if round is complete
     return this.checkRoundComplete(newState);
+  }
+
+  private getLastFullRaiseBet(state: GameState): number {
+    return state.minRaiseTo - state.minRaise;
   }
 
   private lockPreviouslyActedPlayersForRaise(state: GameState, allInUserId: string): void {
@@ -277,7 +326,7 @@ export class GameEngine {
   }
 
   private checkRoundComplete(state: GameState): GameState {
-    const activePlayers = state.players.filter(p => p.status !== 'folded');
+    const activePlayers = state.players.filter(p => p.status !== 'folded' && p.status !== 'out');
 
     // Only one player left - they win the pot
     if (activePlayers.length === 1) {
@@ -314,8 +363,7 @@ export class GameEngine {
 
     let safety = 0;
     while (
-      (state.players[nextIndex].status === 'folded' || state.players[nextIndex].status === 'all_in') &&
-      safety < state.players.length
+      !this.isActionablePlayer(state.players[nextIndex]) && safety < state.players.length
     ) {
       nextIndex = (nextIndex + 1) % state.players.length;
       safety++;
@@ -332,6 +380,7 @@ export class GameEngine {
     };
     newState.currentBet = 0;
     newState.minRaise = this.bigBlind;
+    newState.minRaiseTo = this.bigBlind;
 
     // Reset acted tracking for the new betting round
     this.actedPlayers = new Set();
@@ -340,17 +389,17 @@ export class GameEngine {
     switch (state.phase) {
       case 'preflop':
         newState.phase = 'flop';
-        newState.communityCards = this.deck.dealMultiple(3);
+        newState.communityCards = this.dealFlopCards();
         break;
 
       case 'flop':
         newState.phase = 'turn';
-        newState.communityCards = [...state.communityCards, ...this.deck.dealMultiple(1)];
+        newState.communityCards = [...state.communityCards, this.dealStreetCard()];
         break;
 
       case 'turn':
         newState.phase = 'river';
-        newState.communityCards = [...state.communityCards, ...this.deck.dealMultiple(1)];
+        newState.communityCards = [...state.communityCards, this.dealStreetCard()];
         break;
 
       case 'river':
@@ -370,8 +419,7 @@ export class GameEngine {
     let nextIndex = (fromIndex + 1) % state.players.length;
     let safety = 0;
     while (
-      (state.players[nextIndex].status === 'folded' || state.players[nextIndex].status === 'all_in') &&
-      safety < state.players.length
+      !this.isActionablePlayer(state.players[nextIndex]) && safety < state.players.length
     ) {
       nextIndex = (nextIndex + 1) % state.players.length;
       safety++;
@@ -379,21 +427,47 @@ export class GameEngine {
     return nextIndex;
   }
 
+  private burnCard(): void {
+    const burned = this.deck.deal();
+    if (!burned) {
+      throw new Error('Not enough cards in deck');
+    }
+  }
+
+  private dealFlopCards(): Card[] {
+    this.burnCard();
+    return this.deck.dealMultiple(3);
+  }
+
+  private dealStreetCard(): Card {
+    this.burnCard();
+    const card = this.deck.deal();
+    if (!card) {
+      throw new Error('Not enough cards in deck');
+    }
+    return card;
+  }
+
   private dealRemainingCardsAndShowdown(state: GameState): GameState {
     const newState: GameState = {
       ...state,
       players: state.players.map(p => ({ ...p, bet: 0 })),
       currentBet: 0,
+      minRaiseTo: this.bigBlind,
       phase: 'river',
     };
 
-    const missingCommunityCards = 5 - newState.communityCards.length;
-    if (missingCommunityCards > 0) {
-      newState.communityCards = [
-        ...newState.communityCards,
-        ...this.deck.dealMultiple(missingCommunityCards),
-      ];
+    let communityCards = [...newState.communityCards];
+    if (state.phase === 'preflop') {
+      communityCards = this.dealFlopCards();
     }
+    if (communityCards.length < 4) {
+      communityCards = [...communityCards, this.dealStreetCard()];
+    }
+    if (communityCards.length < 5) {
+      communityCards = [...communityCards, this.dealStreetCard()];
+    }
+    newState.communityCards = communityCards;
 
     return this.showdown(newState);
   }
@@ -418,7 +492,7 @@ export class GameEngine {
     // Calculate pots and distribute winnings
     const pots = PotCalculator.calculatePots(state.players);
     const allPots: Pot[] = [
-      { amount: pots.mainPot, eligiblePlayerIds: activePlayers.map(p => p.userId) },
+      { amount: pots.mainPot, eligiblePlayerIds: pots.mainPotEligiblePlayerIds },
       ...pots.sidePots,
     ];
 
@@ -449,7 +523,9 @@ export class GameEngine {
 
     for (const pot of pots) {
       const eligibleHands = hands.filter(h => pot.eligiblePlayerIds.includes(h.userId));
-      if (eligibleHands.length === 0) continue;
+      if (eligibleHands.length === 0) {
+        throw new Error('No eligible players for pot');
+      }
 
       const potWinnerIds = this.orderPlayerIdsByOddChipPriority(
         this.findBestPlayerIds(eligibleHands),

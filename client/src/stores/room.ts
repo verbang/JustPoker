@@ -9,11 +9,17 @@ export const useRoomStore = defineStore('room', () => {
   const roomId = ref<string | null>(null);
   const players = ref<RoomPlayer[]>([]);
   const initialChips = ref(100);
+  const actionTimeoutEnabled = ref(false);
 
-  function setRoom(code: string, id: string, chips: number) {
+  function setRoom(code: string, id: string, chips: number, timeoutEnabled = false) {
     roomCode.value = code;
     roomId.value = id;
     initialChips.value = chips;
+    actionTimeoutEnabled.value = timeoutEnabled;
+  }
+
+  function setActionTimeoutEnabled(enabled: boolean) {
+    actionTimeoutEnabled.value = enabled;
   }
 
   function setPlayers(newPlayers: RoomPlayer[]) {
@@ -24,7 +30,18 @@ export const useRoomStore = defineStore('room', () => {
     roomCode.value = null;
     roomId.value = null;
     players.value = [];
+    actionTimeoutEnabled.value = false;
   }
 
-  return { roomCode, roomId, players, initialChips, setRoom, setPlayers, clearRoom };
+  return {
+    roomCode,
+    roomId,
+    players,
+    initialChips,
+    actionTimeoutEnabled,
+    setRoom,
+    setPlayers,
+    setActionTimeoutEnabled,
+    clearRoom,
+  };
 });
