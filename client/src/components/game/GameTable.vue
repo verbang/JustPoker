@@ -135,12 +135,12 @@ const mySeatOverlayStyle = computed(() => {
  */
 function getSeatStyle(displayIndex: number, total: number) {
   if (total <= 1) {
-    return { left: '50%', top: '85%', transform: 'translate(-50%, -50%)' };
+    return { left: '50%', top: 'var(--my-seat-top)', transform: 'translate(-50%, -50%)' };
   }
 
   // Me (index 0) is always at bottom center
   if (displayIndex === 0) {
-    return { left: '50%', top: '88%', transform: 'translate(-50%, -50%)' };
+    return { left: '50%', top: 'var(--my-seat-top)', transform: 'translate(-50%, -50%)' };
   }
 
   // Other players spread along the top arc (from left to right)
@@ -167,7 +167,7 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   const seatStyle = getSeatStyle(displayIndex, total);
   return {
     ...seatStyle,
-    top: `calc(${seatStyle.top} + 82px)`,
+    top: `calc(${seatStyle.top} + var(--my-seat-overlay-offset))`,
   };
 }
 </script>
@@ -180,6 +180,8 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   height: min(560px, 100%);
   min-height: 360px;
   margin: 0 auto;
+  --my-seat-top: 88%;
+  --my-seat-overlay-offset: 82px;
 }
 
 .table-surface {
@@ -252,6 +254,8 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
     height: 100%;
     min-height: 0;
     max-width: none;
+    --my-seat-top: 76%;
+    --my-seat-overlay-offset: 52px;
   }
 
   .table-surface {
@@ -279,6 +283,11 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
 }
 
 @media (max-height: 430px) and (orientation: landscape) {
+  .game-table {
+    --my-seat-top: 72%;
+    --my-seat-overlay-offset: 46px;
+  }
+
   .table-surface {
     width: 50%;
     height: 36%;
