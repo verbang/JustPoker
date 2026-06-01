@@ -30,8 +30,13 @@
           :show-ready-button="myStatus === 'seated'"
           :hand-hole-cards="myCards"
           :hand-community-cards="communityCards"
+          :showdown-mode="showdownMode"
+          :showdown-players="showdownPlayers"
+          :winning-hand-description="winningHandDescription"
+          :winner-can-reveal="winnerCanReveal"
           @ready="handleReady"
           @tip="handleTip"
+          @reveal-cards="handleRevealCards"
         />
       </main>
 
@@ -75,7 +80,8 @@ import { socketService } from '../services/socket';
 import { roomApi } from '../services/api';
 import { soundManager } from '../utils/sounds';
 import { ACTION_TIMEOUT } from '../../../shared/constants/game.constants';
-import type { GamePlayer } from '../../../shared/types/game.types';
+import { evaluateBestHand } from '../utils/handEvaluator';
+import type { GamePlayer, Card, GameState } from '../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../shared/types/room.types';
 import GameTable from '../components/game/GameTable.vue';
 import type { TablePlayer } from '../components/game/GameTable.vue';
@@ -131,6 +137,69 @@ const seatedPlayers = computed(() => {
 });
 
 const lastWinnerIds = ref<string[]>([]);
+const lastGameState = ref<GameState | null>(null);
+
+interface ShowdownPlayerData {
+  cards: Card[];
+  handDescription: string;
+}
+
+// 摊牌场景：正常摊牌（2+ 未弃牌玩家）或弃牌获胜后赢家主动亮牌
+const showdownPlayers = computed(() => {
+  const gs = lastGameState.value;
+  if (!gs || gs.status !== 'finished') return new Map<string, ShowdownPlayerData>();
+
+  // 场景 1：正常摊牌（2+ 未弃牌玩家）
+  const activePlayers = gs.players.filter(p => p.status !== 'folded' && p.cards && p.cards.length >= 2);
+  if (activePlayers.length >= 2) {
+    const map = new Map<string, ShowdownPlayerData>();
+    for (const gp of activePlayers) {
+      const handResult = evaluateBestHand(gp.cards, gs.communityCards);
+      map.set(gp.userId, {
+        cards: gp.cards,
+        handDescription: handResult?.description ?? '',
+      });
+    }
+    return map;
+  }
+
+  // 场景 2：弃牌获胜 + 赢家已主动亮牌
+  if (gs.isFoldWin && revealedCards.value) {
+    const map = new Map<string, ShowdownPlayerData>();
+    const totalCards = revealedCards.value.cards.length + gs.communityCards.length;
+    const handResult = totalCards >= 5 ? evaluateBestHand(revealedCards.value.cards, gs.communityCards) : null;
+    map.set(revealedCards.value.userId, {
+      cards: revealedCards.value.cards,
+      handDescription: handResult?.description ?? '已亮牌',
+    });
+    return map;
+  }
+
+  return new Map<string, ShowdownPlayerData>();
+});
+
+const winningHandDescription = computed(() => lastGameState.value?.winningHand ?? '');
+const showdownMode = computed(() => showdownPlayers.value.size > 0);
+
+// 是否为弃牌获胜（只有赢家一人，其他玩家全部弃牌）
+const isFoldWin = computed(() => lastGameState.value?.isFoldWin === true);
+
+// 赢家是否可以主动亮牌（弃牌获胜 + 当前用户是赢家 + 尚未亮牌）
+const winnerCanReveal = computed(() => {
+  if (!isFoldWin.value) return false;
+  if (!lastGameState.value?.winnerId) return false;
+  if (lastGameState.value.winnerId !== userId.value) return false;
+  if (revealedCards.value) return false;
+  if (revealWindowExpired.value) return false;
+  return true;
+});
+
+// 已亮牌的数据（由 CARDS_REVEALED 事件设置）
+const revealedCards = ref<{ userId: string; cards: Card[] } | null>(null);
+// 亮牌窗口是否已过期（与服务端 30 秒超时同步）
+const revealWindowExpired = ref(false);
+let revealWindowTimer: ReturnType<typeof setTimeout> | null = null;
+
 const winnerId = computed(() => gameStore.gameState?.winnerId);
 const winnerIds = computed(() => {
   if (gameStore.gameState?.status === 'playing') return [];
@@ -138,7 +207,11 @@ const winnerIds = computed(() => {
 });
 const communityCards = computed(() => gameStore.gameState?.communityCards || []);
 const pot = computed(() => gameStore.gameState?.pot || 0);
-const currentPlayerIndex = computed(() => gameStore.gameState?.currentPlayerIndex || 0);
+const currentPlayerIndex = computed(() => {
+  const state = gameStore.gameState;
+  if (!state || state.status !== 'playing') return -1;
+  return state.currentPlayerIndex;
+});
 const currentBet = computed(() => gameStore.gameState?.currentBet || 0);
 const minRaise = computed(() => gameStore.gameState?.minRaise || 10);
 const minRaiseTo = computed(() => gameStore.gameState?.minRaiseTo);
@@ -149,6 +222,8 @@ const isMyTurn = computed(() => gameStore.isMyTurn);
 const actionTimeoutEnabled = computed(() => roomStore.actionTimeoutEnabled);
 const isCooldown = ref(false);
 const emojiTimestamps: number[] = [];
+const emojiTimers = new Map<number, ReturnType<typeof setTimeout>>();
+let cooldownTimer: ReturnType<typeof setTimeout> | null = null;
 interface ActiveEmoji { id: number; userId: string; emoji: string; }
 let emojiIdCounter = 0;
 const activeEmojis = ref<ActiveEmoji[]>([]);
@@ -194,8 +269,28 @@ onMounted(async () => {
 
   socketService.onGameUpdate((data) => {
     gameStore.updateGameState(data);
+    if (data.status === 'finished') {
+      lastGameState.value = data;
+      lastWinnerIds.value = data.winnerIds || (data.winnerId ? [data.winnerId] : []);
+      // 弃牌获胜时启动 30 秒亮牌窗口
+      if (data.isFoldWin) {
+        revealWindowExpired.value = false;
+        if (revealWindowTimer) clearTimeout(revealWindowTimer);
+        revealWindowTimer = setTimeout(() => {
+          revealWindowExpired.value = true;
+          revealWindowTimer = null;
+        }, 30000);
+      }
+    }
     if (data.status === 'playing') {
       lastWinnerIds.value = [];
+      lastGameState.value = null;
+      revealedCards.value = null;
+      revealWindowExpired.value = false;
+      if (revealWindowTimer) {
+        clearTimeout(revealWindowTimer);
+        revealWindowTimer = null;
+      }
     }
     // Clear countdown when game starts
     countdownValue.value = null;
@@ -216,9 +311,11 @@ onMounted(async () => {
     if (activeEmojis.value.length > 3) {
       activeEmojis.value.shift();
     }
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       activeEmojis.value = activeEmojis.value.filter(e => e.id !== id);
+      emojiTimers.delete(id);
     }, 3000);
+    emojiTimers.set(id, timer);
   });
 
   socketService.onGameStart(() => {
@@ -230,11 +327,36 @@ onMounted(async () => {
     lastWinnerIds.value = data.winnerIds || (data.winnerId ? [data.winnerId] : []);
     actionRemainingSeconds.value = null;
   });
+
+  socketService.onCardsRevealed((data) => {
+    // 仅在游戏已结束时接受亮牌数据，防止旧事件污染新一局
+    if (lastGameState.value?.status === 'finished') {
+      revealedCards.value = data;
+    }
+  });
+
+  socketService.onError((data) => {
+    alert(data.message);
+  });
+
+  socketService.onRebuyRequired((data) => {
+    alert(data.message || '筹码不足，请重新买入');
+  });
 });
 
 onUnmounted(() => {
   socketService.offAll();
   stopActionCountdown();
+  emojiTimers.forEach(timer => clearTimeout(timer));
+  emojiTimers.clear();
+  if (cooldownTimer) {
+    clearTimeout(cooldownTimer);
+    cooldownTimer = null;
+  }
+  if (revealWindowTimer) {
+    clearTimeout(revealWindowTimer);
+    revealWindowTimer = null;
+  }
 });
 
 watch(activeActionKey, (key) => {
@@ -306,14 +428,19 @@ function handleEmoji(emoji: string) {
   if (emojiTimestamps.length >= 5) {
     isCooldown.value = true;
     emojiTimestamps.length = 0;
-    setTimeout(() => {
+    cooldownTimer = setTimeout(() => {
       isCooldown.value = false;
+      cooldownTimer = null;
     }, 10000);
   }
 }
 
 function handleTip(player: TablePlayer | GamePlayer | RoomPlayer) {
   console.log('Tip player:', player.nickname);
+}
+
+function handleRevealCards() {
+  socketService.revealCards(roomCode.value);
 }
 </script>
 

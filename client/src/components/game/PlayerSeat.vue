@@ -5,7 +5,8 @@
       'is-me': isMe,
       'is-current': isCurrentPlayer,
       'is-folded': player.status === 'folded',
-      'is-out': player.status === 'out'
+      'is-out': player.status === 'out',
+      'is-showdown-winner': isShowdownWinner
     }"
   >
     <div
@@ -48,7 +49,7 @@
       </span>
     </div>
 
-    <!-- My cards (face up) -->
+    <!-- 自己的牌（正面） -->
     <div v-if="isMe && myCards && myCards.length" class="cards">
       <div
         v-for="card in myCards"
@@ -60,10 +61,26 @@
         <span class="card-suit">{{ getSuitSymbol(card.suit) }}</span>
       </div>
     </div>
-    <!-- Other players' cards (face down) during gameplay -->
+    <!-- 摊牌时其他玩家亮牌 -->
+    <div v-else-if="isShowdownRevealed && myCards && myCards.length" class="cards">
+      <div
+        v-for="card in myCards"
+        :key="`reveal-${card.suit}-${card.rank}`"
+        class="card revealed-card"
+        :class="getSuitClass(card.suit)"
+      >
+        <span class="card-rank">{{ card.rank }}</span>
+        <span class="card-suit">{{ getSuitSymbol(card.suit) }}</span>
+      </div>
+    </div>
+    <!-- 游戏中其他玩家牌背 -->
     <div v-else-if="player.status === 'playing' && !isMe" class="cards">
       <div class="card card-back"></div>
       <div class="card card-back"></div>
+    </div>
+    <!-- 摊牌时显示牌型 -->
+    <div v-if="isShowdownRevealed && showdownHandDescription" class="showdown-hand-badge" :class="{ 'winner-badge': isShowdownWinner }">
+      {{ showdownHandDescription }}
     </div>
   </div>
 </template>
@@ -88,6 +105,9 @@ const props = defineProps<{
   myCards?: Card[];
   emojis?: { id: number; userId: string; emoji: string }[];
   actionRemainingSeconds?: number | null;
+  isShowdownRevealed?: boolean;
+  isShowdownWinner?: boolean;
+  showdownHandDescription?: string;
 }>();
 
 const emit = defineEmits<{
@@ -135,6 +155,7 @@ function handleTip() {
   padding: 6px 10px;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
   transition: all 0.3s ease;
   min-width: 80px;
   max-width: 110px;
@@ -147,10 +168,10 @@ function handleTip() {
 }
 
 .player-seat.is-current {
-  border-color: #ffeb3b;
+  border: 2px solid #FF513D;
   box-shadow:
-    0 0 0 2px rgba(255, 235, 59, 0.4),
-    0 0 18px rgba(255, 235, 59, 0.8);
+    0 0 0 2px rgba(255, 81, 61, 0.4),
+    0 0 18px rgba(255, 81, 61, 0.8);
 }
 
 .player-seat.is-folded {
@@ -161,12 +182,22 @@ function handleTip() {
   opacity: 0.3;
 }
 
+.player-seat.is-showdown-winner {
+  border: 2px solid #ffd700;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+}
+
+.player-seat.is-me.is-showdown-winner {
+  border: 2px solid #4caf50;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+}
+
 .action-ring {
   position: absolute;
   inset: -7px;
   border-radius: 14px;
   background:
-    conic-gradient(from -90deg, #ffeb3b var(--action-progress), rgba(255, 235, 59, 0.08) 0);
+    conic-gradient(from -90deg, #FF513D var(--action-progress), rgba(255, 81, 61, 0.08) 0);
   pointer-events: none;
   z-index: -1;
 }
@@ -274,15 +305,15 @@ function handleTip() {
   min-width: 30px;
   padding: 2px 7px;
   transform: translateX(-50%);
-  border: 2px solid #ffeb3b;
+  border: 2px solid #FF513D;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.82);
-  color: #ffeb3b;
+  color: #FF513D;
   font-size: 15px;
   font-weight: 900;
   line-height: 1.25;
   text-align: center;
-  box-shadow: 0 0 10px rgba(255, 235, 59, 0.55);
+  box-shadow: 0 0 10px rgba(255, 81, 61, 0.55);
 }
 
 .nickname {
@@ -357,6 +388,35 @@ function handleTip() {
   border-color: #0d47a1;
 }
 
+/* 摊牌亮牌样式 */
+.revealed-card {
+  animation: card-flip-in 0.4s ease-out;
+}
+
+@keyframes card-flip-in {
+  from { opacity: 0; transform: rotateY(90deg); }
+  to { opacity: 1; transform: rotateY(0deg); }
+}
+
+.showdown-hand-badge {
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ccc;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.showdown-hand-badge.winner-badge {
+  color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.5);
+  background: rgba(255, 215, 0, 0.12);
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.3);
+}
+
 @media (orientation: landscape) and (max-width: 900px) {
   .player-seat {
     gap: 2px;
@@ -367,7 +427,8 @@ function handleTip() {
   }
 
   .player-seat.is-me,
-  .player-seat.is-current {
+  .player-seat.is-current,
+  .player-seat.is-showdown-winner {
     border-width: 1px;
   }
 
@@ -450,6 +511,11 @@ function handleTip() {
 
   .crown {
     font-size: 22px;
+  }
+
+  .showdown-hand-badge {
+    font-size: 9px;
+    padding: 1px 6px;
   }
 }
 </style>

@@ -55,6 +55,7 @@ export interface GameState {
   status: 'waiting' | 'playing' | 'finished';
   winnerId?: string;
   winnerIds?: string[];
+  isFoldWin?: boolean;  // 是否为弃牌获胜（其他玩家全部弃牌）
   winningHand?: string;
 }
 

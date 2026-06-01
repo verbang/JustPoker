@@ -3,6 +3,18 @@
     <div class="table-surface">
       <CommunityCards :cards="communityCards" />
       <div class="pot" v-if="pot > 0">底池: {{ pot }}</div>
+      <button
+        v-if="winnerCanReveal"
+        class="reveal-btn"
+        type="button"
+        @click="$emit('revealCards')"
+      >
+        亮牌
+      </button>
+      <div v-if="showdownMode && winningHandDescription" class="winning-hand-banner">
+        <span class="winning-hand-icon">&#x1F3C6;</span>
+        <span class="winning-hand-text">{{ winningHandDescription }}</span>
+      </div>
     </div>
     <div class="seats">
       <PlayerSeat
@@ -12,9 +24,12 @@
         :is-me="player.userId === userId"
         :is-current-player="player.seatNumber === currentSeatNumber"
         :is-winner="winnerIds.includes(player.userId)"
-        :my-cards="player.userId === userId ? myCards : []"
+        :my-cards="getPlayerCards(player)"
         :emojis="getPlayerEmojis(player.userId)"
         :action-remaining-seconds="player.seatNumber === currentSeatNumber ? actionRemainingSeconds : null"
+        :is-showdown-revealed="showdownMode && showdownPlayers?.has(player.userId) === true"
+        :is-showdown-winner="showdownMode && winnerIds.includes(player.userId)"
+        :showdown-hand-description="showdownPlayers?.get(player.userId)?.handDescription ?? ''"
         :style="getSeatStyle(displayIndex, displayPlayers.length)"
         @tip="$emit('tip', player)"
       />
@@ -50,6 +65,11 @@ import HandDisplay from './HandDisplay.vue';
 import type { Card, GamePlayer } from '../../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../../shared/types/room.types';
 
+interface ShowdownPlayerData {
+  cards: Card[];
+  handDescription: string;
+}
+
 export type TablePlayer = Omit<RoomPlayer, 'status'> & {
   status: RoomPlayer['status'] | GamePlayer['status'];
   isDealer: boolean;
@@ -71,6 +91,10 @@ const props = defineProps<{
   showReadyButton?: boolean;
   handHoleCards?: Card[];
   handCommunityCards?: Card[];
+  showdownMode?: boolean;
+  showdownPlayers?: Map<string, ShowdownPlayerData>;
+  winningHandDescription?: string;
+  winnerCanReveal?: boolean;
 }>();
 
 const winnerIds = computed(() => props.winnerIds || (props.winnerId ? [props.winnerId] : []));
@@ -78,6 +102,7 @@ const winnerIds = computed(() => props.winnerIds || (props.winnerId ? [props.win
 defineEmits<{
   (e: 'tip', player: TablePlayer): void;
   (e: 'ready'): void;
+  (e: 'revealCards'): void;
 }>();
 
 const handHoleCards = computed(() => props.handHoleCards ?? []);
@@ -85,6 +110,12 @@ const handCommunityCards = computed(() => props.handCommunityCards ?? []);
 
 function getPlayerEmojis(userId: string) {
   return props.activeEmojis.filter(e => e.userId === userId);
+}
+
+function getPlayerCards(player: TablePlayer): Card[] {
+  if (player.userId === props.userId) return props.myCards;
+  const showdown = props.showdownPlayers?.get(player.userId);
+  return showdown?.cards ?? [];
 }
 
 /**
@@ -207,12 +238,64 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   font-weight: bold;
 }
 
+.reveal-btn {
+  padding: 6px 20px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 3px 8px rgba(255, 152, 0, 0.4);
+  animation: reveal-btn-pulse 1.5s ease-in-out infinite;
+}
+
+.reveal-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 5px 12px rgba(255, 152, 0, 0.6);
+}
+
+@keyframes reveal-btn-pulse {
+  0%, 100% { box-shadow: 0 3px 8px rgba(255, 152, 0, 0.4); }
+  50% { box-shadow: 0 3px 16px rgba(255, 152, 0, 0.7); }
+}
+
+.winning-hand-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: rgba(255, 215, 0, 0.15);
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  border-radius: 20px;
+  animation: banner-fade-in 0.6s ease-out;
+}
+
+.winning-hand-icon {
+  font-size: 16px;
+}
+
+.winning-hand-text {
+  color: #ffd700;
+  font-size: 14px;
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+}
+
+@keyframes banner-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .seats {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
+  pointer-events: none;
 }
 
 .my-seat-overlay {
@@ -221,6 +304,7 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   display: flex;
   flex-direction: column;
   align-items: center;
+  pointer-events: auto;
   gap: 6px;
   width: max-content;
   max-width: min(280px, 80vw);
@@ -270,6 +354,18 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
     font-size: 13px;
   }
 
+  .winning-hand-banner {
+    padding: 4px 10px;
+  }
+
+  .winning-hand-icon {
+    font-size: 13px;
+  }
+
+  .winning-hand-text {
+    font-size: 11px;
+  }
+
   .my-seat-overlay {
     gap: 4px;
   }
@@ -279,6 +375,11 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
     padding: 5px 18px;
     font-size: 12px;
     border-radius: 6px;
+  }
+
+  .reveal-btn {
+    padding: 4px 14px;
+    font-size: 12px;
   }
 }
 

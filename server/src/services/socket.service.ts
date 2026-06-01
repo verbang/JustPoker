@@ -2,10 +2,10 @@ import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
 import { SOCKET_EVENTS } from '../../../shared/constants/socket.constants';
-import { ACTION_TIMEOUT } from '../../../shared/constants/game.constants';
+import { ACTION_TIMEOUT, EMOJI_RATE_LIMIT_WINDOW, EMOJI_RATE_LIMIT_COUNT } from '../../../shared/constants/game.constants';
 import { roomService } from '../modules/room/room.service';
 import { GameEngine } from '../modules/game/game.engine';
-import { GameState, GamePlayer, PlayerAction } from '../../../shared/types/game.types';
+import { GameState, GamePlayer, PlayerAction, Card } from '../../../shared/types/game.types';
 
 interface SocketPayload {
   [key: string]: unknown;
@@ -24,6 +24,12 @@ class SocketService {
   private disconnectedPlayers: Map<string, { userId: string; roomCode: string; timestamp: number }> = new Map();
   // 断线重连超时时间（30秒）
   private readonly RECONNECT_TIMEOUT_MS = 30000;
+  // 表情发送限流记录
+  private emojiRateLimits: Map<string, number[]> = new Map();
+  // 弃牌获胜时暂存赢家数据，等待亮牌操作
+  private pendingReveals: Map<string, { userId: string; cards: Card[]; roomCode: string; timer: NodeJS.Timeout }> = new Map();
+  // 已完成的亮牌数据，用于重连玩家回放
+  private completedReveals: Map<string, { userId: string; cards: Card[] }> = new Map();
 
   initialize(httpServer: HttpServer): void {
     this.io = new Server(httpServer, {
@@ -38,6 +44,16 @@ class SocketService {
 
       // Join room
       socket.on(SOCKET_EVENTS.JOIN_ROOM, (data: { roomCode: string; userId: string }) => {
+        // 处理同一用户多标签页连接：断开旧 socket
+        const existingSocketId = this.userSockets.get(data.userId);
+        if (existingSocketId && existingSocketId !== socket.id) {
+          const existingSocket = this.io.sockets.sockets.get(existingSocketId);
+          if (existingSocket) {
+            existingSocket.emit(SOCKET_EVENTS.ERROR, { message: '您的账号在其他标签页登录' });
+            existingSocket.disconnect(true);
+          }
+        }
+
         socket.join(data.roomCode);
         socket.data.userId = data.userId;
         socket.data.roomCode = data.roomCode;
@@ -67,6 +83,22 @@ class SocketService {
           if (disconnectedInfo && gameState.status === 'playing' && currentPlayer?.userId === data.userId) {
             this.scheduleActionTimeout(data.roomCode, gameState);
           }
+        }
+
+        // 游戏已结束但亮牌窗口仍在：恢复赢家的亮牌能力
+        const pending = this.pendingReveals.get(data.roomCode);
+        if (pending && pending.userId === data.userId) {
+          this.emitToSocket(socket.id, SOCKET_EVENTS.GAME_OVER, {
+            winnerId: pending.userId,
+            winnerIds: [pending.userId],
+            isFoldWin: true,
+          });
+        }
+
+        // 已亮牌的数据重放：让重连玩家也能看到亮牌结果
+        const revealed = this.completedReveals.get(data.roomCode);
+        if (revealed) {
+          this.emitToSocket(socket.id, SOCKET_EVENTS.CARDS_REVEALED, revealed);
         }
       });
 
@@ -112,8 +144,23 @@ class SocketService {
 
       // Send emoji
       socket.on(SOCKET_EVENTS.SEND_EMOJI, (data: { roomCode: string; emoji: string }) => {
+        const userId = socket.data.userId as string;
+        const now = Date.now();
+
+        // 获取用户发送记录，清理过期记录
+        const timestamps = this.emojiRateLimits.get(userId) || [];
+        const validTimestamps = timestamps.filter(t => now - t < EMOJI_RATE_LIMIT_WINDOW);
+
+        if (validTimestamps.length >= EMOJI_RATE_LIMIT_COUNT) {
+          this.emitToUser(userId, SOCKET_EVENTS.ERROR, { message: '表情发送过于频繁，请稍后再试' });
+          return;
+        }
+
+        validTimestamps.push(now);
+        this.emojiRateLimits.set(userId, validTimestamps);
+
         this.emitToRoom(data.roomCode, SOCKET_EVENTS.NEW_EMOJI, {
-          userId: socket.data.userId,
+          userId,
           emoji: data.emoji,
         });
       });
@@ -135,12 +182,39 @@ class SocketService {
         }
       });
 
+      // 赢家亮牌
+      socket.on(SOCKET_EVENTS.REVEAL_CARDS, (data: { roomCode: string }) => {
+        const userId = socket.data.userId as string;
+        const pending = this.pendingReveals.get(data.roomCode);
+
+        if (!pending || pending.userId !== userId) {
+          this.emitToUser(userId, SOCKET_EVENTS.ERROR, { message: '当前无法亮牌' });
+          return;
+        }
+
+        // 清除超时定时器
+        clearTimeout(pending.timer);
+        this.pendingReveals.delete(data.roomCode);
+
+        // 保存亮牌结果，供重连玩家回放
+        this.completedReveals.set(data.roomCode, { userId, cards: pending.cards });
+
+        // 广播亮牌数据给房间内所有人
+        this.emitToRoom(data.roomCode, SOCKET_EVENTS.CARDS_REVEALED, {
+          userId,
+          cards: pending.cards,
+        });
+
+        logger.info(`房间 ${data.roomCode} 赢家 ${userId} 亮牌`);
+      });
+
       socket.on('disconnect', () => {
         const userId = socket.data.userId as string;
         const roomCode = socket.data.roomCode as string;
         logger.info(`Client disconnected: ${socket.id}, userId: ${userId}`);
         if (userId && this.userSockets.get(userId) === socket.id) {
           this.userSockets.delete(userId);
+          this.emojiRateLimits.delete(userId);
         }
 
         if (roomCode && userId) {
@@ -244,6 +318,14 @@ class SocketService {
     // Don't start if game is already in progress
     if (this.gameStates.has(roomCode)) return;
 
+    // 清除上一局的亮牌数据
+    this.completedReveals.delete(roomCode);
+    const pendingReveal = this.pendingReveals.get(roomCode);
+    if (pendingReveal) {
+      clearTimeout(pendingReveal.timer);
+      this.pendingReveals.delete(roomCode);
+    }
+
     const room = roomService.getRoom(roomCode);
     if (!room) return;
 
@@ -344,6 +426,23 @@ class SocketService {
     });
     this.dealerSeatNumbers.set(roomCode, gameState.players[gameState.dealerIndex]?.seatNumber ?? 1);
 
+    // 弃牌获胜时暂存赢家数据，等待亮牌操作
+    if (gameState.isFoldWin && gameState.winnerId) {
+      const winner = gameState.players.find(p => p.userId === gameState.winnerId);
+      if (winner && winner.cards && winner.cards.length >= 2) {
+        const timer = setTimeout(() => {
+          this.pendingReveals.delete(roomCode);
+          logger.info(`房间 ${roomCode} 赢家亮牌超时，自动盖牌`);
+        }, 30000);
+        this.pendingReveals.set(roomCode, {
+          userId: gameState.winnerId,
+          cards: winner.cards,
+          roomCode,
+          timer,
+        });
+      }
+    }
+
     // Clean up game state
     this.gameEngines.delete(roomCode);
     this.gameStates.delete(roomCode);
@@ -354,6 +453,7 @@ class SocketService {
     this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_OVER, {
       winnerId: gameState.winnerId,
       winnerIds: gameState.winnerIds || (gameState.winnerId ? [gameState.winnerId] : []),
+      isFoldWin: gameState.isFoldWin,
     });
 
     logger.info(`Game finished in room ${roomCode}, winner: ${gameState.winnerId}`);
@@ -511,6 +611,14 @@ class SocketService {
         this.clearReconnectTimeout(key);
       }
     }
+
+    // 清理该房间的待亮牌数据
+    const pendingReveal = this.pendingReveals.get(roomCode);
+    if (pendingReveal) {
+      clearTimeout(pendingReveal.timer);
+      this.pendingReveals.delete(roomCode);
+    }
+    this.completedReveals.delete(roomCode);
 
     logger.info(`已清理房间 ${roomCode} 的关联游戏状态`);
   }

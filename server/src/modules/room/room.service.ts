@@ -46,6 +46,10 @@ export class RoomService {
     return player;
   }
 
+  isRoomFull(roomCode: string): boolean {
+    return this.roomManager.isRoomFull(roomCode);
+  }
+
   selectSeat(roomCode: string, userId: string, seatNumber: number): boolean {
     return this.roomManager.selectSeat(roomCode, userId, seatNumber);
   }

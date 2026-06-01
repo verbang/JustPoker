@@ -11,7 +11,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, onUnmounted } from 'vue';
 
 const props = defineProps<{
   count: number | null;
@@ -19,6 +19,7 @@ const props = defineProps<{
 
 const visible = ref(false);
 const displayText = ref('');
+let goTimer: ReturnType<typeof setTimeout> | null = null;
 
 watch(() => props.count, (newCount) => {
   if (newCount === null) {
@@ -33,9 +34,17 @@ watch(() => props.count, (newCount) => {
   } else {
     displayText.value = 'Go!';
     // Hide after "Go!" animation
-    setTimeout(() => {
+    goTimer = setTimeout(() => {
       visible.value = false;
+      goTimer = null;
     }, 1000);
+  }
+});
+
+onUnmounted(() => {
+  if (goTimer) {
+    clearTimeout(goTimer);
+    goTimer = null;
   }
 });
 </script>

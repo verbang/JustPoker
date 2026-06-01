@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_EVENTS } from '../../../shared/constants/socket.constants';
-import type { GameState, PlayerAction } from '../../../shared/types/game.types';
+import type { Card, GameState, PlayerAction } from '../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../shared/types/room.types';
 
 interface RoomUpdatePayload {
@@ -116,6 +116,14 @@ class SocketService {
 
   onGameOver(callback: (data: { winnerId?: string; winnerIds: string[] }) => void): void {
     this.socket?.on(SOCKET_EVENTS.GAME_OVER, callback);
+  }
+
+  revealCards(roomCode: string): void {
+    this.socket?.emit(SOCKET_EVENTS.REVEAL_CARDS, { roomCode });
+  }
+
+  onCardsRevealed(callback: (data: { userId: string; cards: Card[] }) => void): void {
+    this.socket?.on(SOCKET_EVENTS.CARDS_REVEALED, callback);
   }
 
   off(event: string, callback?: (...args: unknown[]) => void): void {

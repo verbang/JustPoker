@@ -64,6 +64,10 @@ router.post('/:roomCode/join', async (req: Request, res: Response) => {
       return res.status(403).json({ error: '房间密码错误' });
     }
 
+    if (roomService.isRoomFull(roomCode)) {
+      return res.status(403).json({ error: '房间已满！' });
+    }
+
     // Generate unique userId for the joining player
     const userId = uuidv4();
     const player = await roomService.joinRoom(roomCode, userId, nickname, chips, password);

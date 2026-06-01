@@ -164,6 +164,17 @@ export class RoomManager {
     return !room.password || room.password === password;
   }
 
+  /**
+   * 检查房间是否已满员（所有座位都被占用）
+   */
+  isRoomFull(roomCode: string): boolean {
+    const players = this.roomPlayers.get(roomCode);
+    if (!players) return false;
+
+    const seatedCount = Array.from(players.values()).filter(p => p.seatNumber !== null).length;
+    return seatedCount >= MAX_SEATS;
+  }
+
   selectSeat(roomCode: string, userId: string, seatNumber: number): boolean {
     const players = this.roomPlayers.get(roomCode);
     if (!players) return false;

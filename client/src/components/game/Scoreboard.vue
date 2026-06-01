@@ -1,22 +1,27 @@
 <template>
   <div class="scoreboard">
-    <h3>比分板</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>玩家</th>
-          <th>当前筹码</th>
-          <th>状态</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="player in displayPlayers" :key="player.userId">
-          <td>{{ player.nickname }}</td>
-          <td>{{ player.chips }}</td>
-          <td>{{ getStatusText(player.displayStatus) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <button class="scoreboard-toggle" type="button" @click="showScoreboard = !showScoreboard">
+      比分板
+    </button>
+
+    <template v-if="showScoreboard">
+      <table>
+        <thead>
+          <tr>
+            <th>玩家</th>
+            <th>当前筹码</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="player in displayPlayers" :key="player.userId">
+            <td>{{ player.nickname }}</td>
+            <td>{{ player.chips }}</td>
+            <td>{{ getStatusText(player.displayStatus) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
 
     <button class="hand-reference-toggle" type="button" @click="showHandReference = !showHandReference">
       牌型参考
@@ -74,6 +79,7 @@ const displayPlayers = computed<DisplayPlayer[]>(() => {
   });
 });
 
+const showScoreboard = ref(true);
 const showHandReference = ref(false);
 
 const handReferences = [
@@ -215,10 +221,24 @@ function getStatusText(status: DisplayStatus): string {
   overflow: auto;
 }
 
-.scoreboard h3 {
-  margin: 0 0 12px 0;
-  text-align: center;
+.scoreboard-toggle {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(255, 215, 0, 0.45);
+  border-radius: 6px;
+  background: rgba(255, 215, 0, 0.12);
   color: #ffd700;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.scoreboard-toggle:hover {
+  background: rgba(255, 215, 0, 0.2);
+}
+
+.scoreboard table {
+  margin-top: 12px;
 }
 
 table {
@@ -326,9 +346,13 @@ td {
     border-radius: 6px;
   }
 
-  .scoreboard h3 {
-    margin-bottom: 6px;
-    font-size: 13px;
+  .scoreboard-toggle {
+    min-height: 28px;
+    font-size: 11px;
+  }
+
+  .scoreboard table {
+    margin-top: 8px;
   }
 
   th,

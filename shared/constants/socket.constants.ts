@@ -9,6 +9,7 @@ export const SOCKET_EVENTS = {
   SEND_EMOJI: 'send-emoji',
   REBUY: 'rebuy',
   TIP_PLAYER: 'tip-player',
+  REVEAL_CARDS: 'reveal-cards',
 
   // 服务器 → 客户端
   ROOM_UPDATE: 'room-update',
@@ -22,4 +23,5 @@ export const SOCKET_EVENTS = {
   ERROR: 'error',
   REBUY_REQUIRED: 'rebuy-required',
   TIP_RECEIVED: 'tip-received',
+  CARDS_REVEALED: 'cards-revealed',
 } as const;

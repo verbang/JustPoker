@@ -29,6 +29,7 @@
       <input v-model="actionTimeoutEnabled" type="checkbox" />
       <span>行动倒计时</span>
     </label>
+    <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
     <button :disabled="!isNicknameValid" @click="createRoom">创建房间</button>
   </div>
 </template>
@@ -52,6 +53,7 @@ const password = ref('');
 const actionTimeoutEnabled = ref(false);
 const isNicknameValid = ref(false);
 const passwordError = ref('');
+const errorMessage = ref('');
 
 function handlePasswordInput() {
   password.value = password.value.replace(/\D/g, '').slice(0, 4);
@@ -70,6 +72,7 @@ function validatePassword() {
 async function createRoom() {
   validatePassword();
   if (passwordError.value) return;
+  errorMessage.value = '';
 
   try {
     const response = await roomApi.createRoom(
@@ -86,6 +89,7 @@ async function createRoom() {
     router.push(`/room/${roomCode}`);
   } catch (error) {
     console.error('Failed to create room:', error);
+    errorMessage.value = '创建房间失败，请稍后重试';
   }
 }
 </script>
@@ -139,5 +143,12 @@ async function createRoom() {
   width: 18px;
   height: 18px;
   accent-color: #4caf50;
+}
+
+.error-message {
+  color: #ff6b6b;
+  font-size: 14px;
+  text-align: center;
+  margin: 0;
 }
 </style>

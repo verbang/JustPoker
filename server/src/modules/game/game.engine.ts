@@ -510,6 +510,7 @@ export class GameEngine {
       winnerId: winners[0],
       winnerIds: winners,
       winningHand: bestHand.description,
+      isFoldWin: false,
     };
   }
 
@@ -579,6 +580,7 @@ export class GameEngine {
       status: 'finished',
       winnerId,
       winnerIds: [winnerId],
+      isFoldWin: true,
     };
   }
 }
