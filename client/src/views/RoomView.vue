@@ -519,9 +519,10 @@ h2 {
 
   .game-layout {
     grid-template-columns: minmax(0, 1fr) minmax(184px, 27vw);
-    grid-template-rows: 1fr;
+    grid-template-rows: minmax(0, 1fr);
     gap: 6px;
     height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    overflow: hidden;
   }
 
   .control-zone {
