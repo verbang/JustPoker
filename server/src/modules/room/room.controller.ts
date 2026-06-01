@@ -11,11 +11,11 @@ router.post('/', async (req: Request, res: Response) => {
     const { nickname, initialChips, password, actionTimeoutEnabled }: CreateRoomRequest = req.body;
 
     if (!nickname || !Number.isInteger(initialChips) || initialChips <= 0) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: '缺少必填参数' });
     }
 
     if (password && (!/^\d{4}$/.test(password))) {
-      return res.status(400).json({ error: 'Password must be 4 digits' });
+      return res.status(400).json({ error: '密码必须为4位数字' });
     }
 
     // Generate unique userId using uuid
@@ -37,7 +37,7 @@ router.post('/', async (req: Request, res: Response) => {
       actionTimeoutEnabled: room.actionTimeoutEnabled,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create room' });
+    res.status(500).json({ error: '创建房间失败' });
   }
 });
 
@@ -48,12 +48,12 @@ router.post('/:roomCode/join', async (req: Request, res: Response) => {
     const { nickname, chips, password }: JoinRoomRequest = req.body;
 
     if (!nickname || !Number.isInteger(chips) || chips <= 0) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: '缺少必填参数' });
     }
 
     const room = roomService.getRoom(roomCode);
     if (!room) {
-      return res.status(404).json({ error: 'Room not found' });
+      return res.status(404).json({ error: '房间不存在' });
     }
 
     if (roomService.hasNickname(roomCode, nickname)) {
@@ -73,7 +73,7 @@ router.post('/:roomCode/join', async (req: Request, res: Response) => {
     const player = await roomService.joinRoom(roomCode, userId, nickname, chips, password);
 
     if (!player) {
-      return res.status(403).json({ error: 'Room not found or wrong password' });
+      return res.status(403).json({ error: '加入房间失败' });
     }
 
     res.json({
@@ -82,7 +82,7 @@ router.post('/:roomCode/join', async (req: Request, res: Response) => {
       status: player.status,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to join room' });
+    res.status(500).json({ error: '加入房间失败' });
   }
 });
 
@@ -93,7 +93,7 @@ router.get('/:roomCode', (req: Request, res: Response) => {
     const room = roomService.getRoom(roomCode);
 
     if (!room) {
-      return res.status(404).json({ error: 'Room not found' });
+      return res.status(404).json({ error: '房间不存在' });
     }
 
     const players = roomService.getRoomPlayers(roomCode);
@@ -117,7 +117,7 @@ router.get('/:roomCode', (req: Request, res: Response) => {
       players,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to get room info' });
+    res.status(500).json({ error: '获取房间信息失败' });
   }
 });
 
