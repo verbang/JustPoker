@@ -47,7 +47,7 @@ class SocketService {
         // 处理同一用户多标签页连接：断开旧 socket
         const existingSocketId = this.userSockets.get(data.userId);
         if (existingSocketId && existingSocketId !== socket.id) {
-          const existingSocket = this.io.sockets.sockets.get(existingSocketId);
+          const existingSocket = this.io!.sockets.sockets.get(existingSocketId);
           if (existingSocket) {
             existingSocket.emit(SOCKET_EVENTS.ERROR, { message: '您的账号在其他标签页登录' });
             existingSocket.disconnect(true);
