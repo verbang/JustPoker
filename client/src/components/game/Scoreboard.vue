@@ -54,8 +54,8 @@ import { computed, ref } from 'vue';
 import type { GamePlayer, GameState } from '../../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../../shared/types/room.types';
 
-type DisplayStatus = RoomPlayer['status'] | GamePlayer['status'] | GameState['status'];
-type DisplayPlayer = RoomPlayer & { displayStatus: DisplayStatus };
+type DisplayStatus = RoomPlayer['status'] | GamePlayer['status'] | GameState['status'] | 'left';
+type DisplayPlayer = Omit<RoomPlayer, 'status'> & { status: RoomPlayer['status'] | 'left'; displayStatus: DisplayStatus };
 
 const props = defineProps<{
   players: RoomPlayer[];
@@ -83,6 +83,7 @@ const displayPlayers = computed<DisplayPlayer[]>(() => {
   const leftPlayers = (props.leftPlayers || [])
     .filter(lp => !props.players.some(p => p.userId === lp.userId))
     .map(lp => ({
+      id: `left-${lp.userId}`,
       ...lp,
       roomId: '',
       seatNumber: null,
