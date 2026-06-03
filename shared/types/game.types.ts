@@ -52,11 +52,13 @@ export interface GameState {
   minRaiseTo: number;
   players: GamePlayer[];
   sidePots: SidePot[];
+  actionRemainingMs?: number; // 重连时服务端发送的操作倒计时剩余毫秒数
   status: 'waiting' | 'playing' | 'finished';
   winnerId?: string;
   winnerIds?: string[];
   isFoldWin?: boolean;  // 是否为弃牌获胜（其他玩家全部弃牌）
   winningHand?: string;
+  lastAction?: { userId: string; action: PlayerAction; amount?: number }; // 最近一次操作（用于前端音效播放）
 }
 
 // 游戏中的玩家

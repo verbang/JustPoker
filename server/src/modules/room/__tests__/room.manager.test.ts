@@ -188,4 +188,63 @@ describe('RoomManager', () => {
 
     expect(manager.createRoom('overflow', 'Overflow', 100)).toBeNull();
   });
+
+  test('should transfer host to next seat player', () => {
+    const room = createTestRoom('host1', 'Host');
+    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user2', 'Player2', 100);
+    manager.selectSeat(room.roomCode, 'user1', 2);
+    manager.selectSeat(room.roomCode, 'user2', 3);
+
+    // Host is at seat 1, should transfer to user1 at seat 2
+    const newHostId = manager.transferHost(room.roomCode, 'host1');
+    expect(newHostId).toBe('user1');
+
+    // Verify room's hostId is updated
+    const updatedRoom = manager.getRoom(room.roomCode);
+    expect(updatedRoom?.hostId).toBe('user1');
+  });
+
+  test('should transfer host to smallest seat if no higher seat exists', () => {
+    const room = createTestRoom('host1', 'Host');
+    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.selectSeat(room.roomCode, 'user1', 3);
+
+    // Host is at seat 1, user1 is at seat 3
+    // No seat > 1 except 3, so should transfer to user1
+    const newHostId = manager.transferHost(room.roomCode, 'host1');
+    expect(newHostId).toBe('user1');
+  });
+
+  test('should return null when transferring host with no other players', () => {
+    const room = createTestRoom('host1', 'Host');
+
+    const newHostId = manager.transferHost(room.roomCode, 'host1');
+    expect(newHostId).toBeNull();
+  });
+
+  test('should reset all players to seated status', () => {
+    const room = createTestRoom('host1', 'Host');
+    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user2', 'Player2', 100);
+    manager.selectSeat(room.roomCode, 'user1', 2);
+    manager.selectSeat(room.roomCode, 'user2', 3);
+
+    // Ready all players
+    manager.readyPlayer(room.roomCode, 'host1');
+    manager.readyPlayer(room.roomCode, 'user1');
+    manager.readyPlayer(room.roomCode, 'user2');
+
+    // Verify all are ready
+    let players = manager.getRoomPlayers(room.roomCode);
+    expect(players.filter(p => p.status === 'ready')).toHaveLength(3);
+
+    // Reset all to seated
+    manager.resetAllPlayersToSeated(room.roomCode);
+
+    // Verify all are seated
+    players = manager.getRoomPlayers(room.roomCode);
+    expect(players.filter(p => p.status === 'seated')).toHaveLength(3);
+    expect(players.filter(p => p.status === 'ready')).toHaveLength(0);
+  });
 });

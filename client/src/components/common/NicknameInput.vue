@@ -4,8 +4,8 @@
     <input
       v-model="nickname"
       :placeholder="placeholder"
-      maxlength="10"
-      @input="validate"
+      :maxlength="NICKNAME_MAX_LENGTH"
+      @input="onInput"
     />
     <span v-if="error" class="error">{{ error }}</span>
     <span v-if="success" class="success">昵称可用</span>
@@ -14,6 +14,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { NICKNAME_MIN_LENGTH, NICKNAME_MAX_LENGTH, NICKNAME_REGEX } from '../../../../shared/constants/game.constants';
 
 const props = defineProps<{
   label?: string;
@@ -30,6 +31,12 @@ const nickname = ref('');
 const error = ref('');
 const success = ref(false);
 
+// 过滤非法字符，只保留中文、英文、数字
+function onInput() {
+  nickname.value = nickname.value.replace(/[^一-龥a-zA-Z0-9]/g, '');
+  validate();
+}
+
 function validate() {
   error.value = '';
   success.value = false;
@@ -39,14 +46,13 @@ function validate() {
     return;
   }
 
-  if (nickname.value.length < 2) {
-    error.value = '昵称至少2个字符';
+  if (nickname.value.length < NICKNAME_MIN_LENGTH) {
+    error.value = `昵称至少${NICKNAME_MIN_LENGTH}个字符`;
     emit('valid', false);
     return;
   }
 
-  const regex = /^[一-龥a-zA-Z0-9]+$/;
-  if (!regex.test(nickname.value)) {
+  if (!NICKNAME_REGEX.test(nickname.value)) {
     error.value = '仅支持中文、英文、数字';
     emit('valid', false);
     return;

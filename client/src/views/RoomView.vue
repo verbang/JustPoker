@@ -2,6 +2,7 @@
   <div class="room">
     <header class="room-header">
       <h2>房间: {{ roomCode }}</h2>
+      <button class="leave-btn" @click="handleLeaveRoom">离开</button>
     </header>
 
     <!-- Seat Selection (when player hasn't selected a seat) -->
@@ -20,11 +21,14 @@
           :players="seatedPlayers"
           :community-cards="communityCards"
           :pot="pot"
+          :main-pot-amount="mainPotAmount"
+          :side-pots="sidePots"
           :current-player-index="currentPlayerIndex"
           :user-id="userId"
           :my-cards="myCards"
           :winner-id="winnerId"
           :winner-ids="winnerIds"
+          :disconnected-player-ids="disconnectedPlayers"
           :active-emojis="activeEmojis"
           :action-remaining-seconds="actionRemainingSeconds"
           :show-ready-button="myStatus === 'seated'"
@@ -60,19 +64,29 @@
           :is-cooldown="isCooldown"
           @send="handleEmoji"
         />
-        <Scoreboard :players="players" :game-state="gameStore.gameState" />
+        <Scoreboard :players="players" :game-state="gameStore.gameState" :left-players="leftPlayers" />
       </aside>
     </div>
 
     <!-- Countdown Overlay -->
     <Countdown :count="countdownValue" />
 
+    <!-- 断线重连覆盖层 -->
+    <ReconnectOverlay
+      :visible="isDisconnected"
+      :is-reconnecting="isReconnecting"
+      :attempt="reconnectAttempt"
+      :reconnect-failed="reconnectFailed"
+      :timeout-ms="RECONNECT_TIMEOUT_MS"
+      @go-home="handleGoHome"
+    />
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '../stores/user';
 import { useRoomStore } from '../stores/room';
 import { useGameStore } from '../stores/game';
@@ -90,8 +104,10 @@ import EmojiPanel from '../components/game/EmojiPanel.vue';
 import Scoreboard from '../components/game/Scoreboard.vue';
 import SeatSelection from '../components/game/SeatSelection.vue';
 import Countdown from '../components/game/Countdown.vue';
+import ReconnectOverlay from '../components/game/ReconnectOverlay.vue';
 
 const route = useRoute();
+const router = useRouter();
 const userStore = useUserStore();
 const roomStore = useRoomStore();
 const gameStore = useGameStore();
@@ -207,6 +223,13 @@ const winnerIds = computed(() => {
 });
 const communityCards = computed(() => gameStore.gameState?.communityCards || []);
 const pot = computed(() => gameStore.gameState?.pot || 0);
+const sidePots = computed(() => gameStore.gameState?.sidePots || []);
+const mainPotAmount = computed(() => {
+  const sp = sidePots.value;
+  if (sp.length === 0) return pot.value;
+  const sidePotsTotal = sp.reduce((sum, s) => sum + s.amount, 0);
+  return pot.value - sidePotsTotal;
+});
 const currentPlayerIndex = computed(() => {
   const state = gameStore.gameState;
   if (!state || state.status !== 'playing') return -1;
@@ -231,6 +254,20 @@ const countdownValue = ref<number | null>(null);
 const actionRemainingSeconds = ref<number | null>(null);
 let actionCountdownTimer: ReturnType<typeof setInterval> | null = null;
 
+// 断线重连状态
+const isDisconnected = ref(false);
+const isReconnecting = ref(false);
+const reconnectAttempt = ref(0);
+const reconnectFailed = ref(false);
+let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
+const RECONNECT_TIMEOUT_MS = 30000;
+// 是否已收到服务端倒计时同步（防止 watcher 重置）
+let pendingActionSync = false;
+// 断线玩家集合（用于显示断线标记）
+const disconnectedPlayers = ref<Set<string>>(new Set());
+// 已离开玩家列表（用于比分板显示）
+const leftPlayers = ref<{ userId: string; nickname: string; chips: number }[]>([]);
+
 const activeActionKey = computed(() => {
   if (!actionTimeoutEnabled.value) return null;
 
@@ -251,6 +288,10 @@ onMounted(async () => {
     console.error('Failed to get room info:', error);
   }
 
+  // 标记等待服务端同步倒计时（防止页面刷新时 watcher 重置）
+  pendingActionSync = true;
+  // 超时清除标志（防止无游戏时卡住）
+  setTimeout(() => { pendingActionSync = false; }, 3000);
   socketService.connect();
   socketService.joinRoom(roomCode.value, userId.value);
 
@@ -259,16 +300,68 @@ onMounted(async () => {
   });
 
   socketService.onCountdownStart((data) => {
-    if (data.count !== undefined) {
+    if (data.count != null) {
       countdownValue.value = data.count;
+      // 倒计时出现3时开始播放游戏开始音效
+      if (data.count === 3) {
+        soundManager.playGameStart();
+      }
     } else {
-      // Countdown started (initial signal before 3)
+      // 倒计时取消（有人离开等原因），停止音效
+      soundManager.stopGameStart();
       countdownValue.value = null;
     }
   });
 
   socketService.onGameUpdate((data) => {
+    // 检测公共牌变化（发牌音效）
+    const prevCommunityCards = gameStore.gameState?.communityCards?.length || 0;
+    const newCommunityCards = data.communityCards?.length || 0;
+
     gameStore.updateGameState(data);
+
+    // 播放操作音效
+    if (data.lastAction) {
+      const { action, userId: actionUserId } = data.lastAction;
+      switch (action) {
+        case 'call':
+        case 'bet':
+          soundManager.playBet();
+          break;
+        case 'raise':
+          soundManager.playRaise();
+          break;
+        case 'all_in':
+          soundManager.playAllIn();
+          break;
+        case 'fold':
+          soundManager.playFold();
+          break;
+      }
+      // 轮到自己时播放提示音
+      if (data.currentPlayerIndex !== undefined) {
+        const currentPlayer = data.players[data.currentPlayerIndex];
+        if (currentPlayer?.userId === userId.value && actionUserId !== userId.value) {
+          soundManager.playYourTurn();
+        }
+      }
+    }
+
+    // 公共牌增加时播放发牌音效
+    if (newCommunityCards > prevCommunityCards && newCommunityCards > 0) {
+      soundManager.playDeal();
+    }
+
+    // 重连时服务端发送的倒计时剩余时间
+    // 必须用 nextTick 延迟执行，确保 Vue watcher 先刷新（看到 pendingActionSync=true 并返回）
+    if (data.actionRemainingMs != null && data.actionRemainingMs > 0) {
+      const remaining = Math.ceil(data.actionRemainingMs / 1000);
+      nextTick(() => {
+        pendingActionSync = false;
+        startActionCountdown(remaining);
+      });
+    }
+
     if (data.status === 'finished') {
       lastGameState.value = data;
       lastWinnerIds.value = data.winnerIds || (data.winnerId ? [data.winnerId] : []);
@@ -296,16 +389,63 @@ onMounted(async () => {
     countdownValue.value = null;
   });
 
-  socketService.onPlayerJoined(() => {
-    soundManager.playJoin();
+  socketService.onPlayerJoined((data) => {
+    // 移除断线标记
+    disconnectedPlayers.value.delete(data.userId);
+    disconnectedPlayers.value = new Set(disconnectedPlayers.value);
+
+    // 当前行动玩家重连，用剩余时间恢复倒计时
+    if (data.reconnected && data.remainingMs != null && data.remainingMs > 0) {
+      pendingActionSync = false;
+      const remaining = Math.ceil(data.remainingMs / 1000);
+      nextTick(() => {
+        startActionCountdown(remaining);
+      });
+    }
   });
 
-  socketService.onPlayerLeft(() => {
-    soundManager.playLeave();
+  socketService.onPlayerLeft((data) => {
+    // 有人离开时停止倒计时音效
+    soundManager.stopGameStart();
+    // 根据离开原因处理
+    if (data.reason === 'disconnect' && data.reconnecting) {
+      // 断线重连：标记该玩家为断线状态
+      disconnectedPlayers.value.add(data.userId);
+      disconnectedPlayers.value = new Set(disconnectedPlayers.value);
+
+      // 如果断线的是当前行动玩家，暂停倒计时
+      const state = gameStore.gameState;
+      if (state && state.status === 'playing') {
+        const currentPlayer = state.players[state.currentPlayerIndex];
+        if (currentPlayer?.userId === data.userId) {
+          stopActionCountdown();
+          // 用服务端发送的剩余时间更新显示（不启动计时器）
+          if (data.remainingMs != null) {
+            actionRemainingSeconds.value = Math.ceil(data.remainingMs / 1000);
+          }
+        }
+      }
+    } else if (data.reason === 'leave' || data.reason === 'timeout') {
+      // 主动离开或超时：从断线集合中移除（如果有）
+      disconnectedPlayers.value.delete(data.userId);
+      disconnectedPlayers.value = new Set(disconnectedPlayers.value);
+
+      // 如果游戏中离开，将玩家添加到已离开列表（用于比分板显示）
+      const state = gameStore.gameState;
+      if (state && state.status === 'playing') {
+        const gamePlayer = state.players.find(p => p.userId === data.userId);
+        if (gamePlayer) {
+          leftPlayers.value.push({
+            userId: data.userId,
+            nickname: gamePlayer.nickname,
+            chips: gamePlayer.chips,
+          });
+        }
+      }
+    }
   });
 
   socketService.onNewEmoji((data: { userId: string; emoji: string }) => {
-    soundManager.playEmoji();
     const id = ++emojiIdCounter;
     activeEmojis.value.push({ id, userId: data.userId, emoji: data.emoji });
     if (activeEmojis.value.length > 3) {
@@ -319,13 +459,20 @@ onMounted(async () => {
   });
 
   socketService.onGameStart(() => {
-    soundManager.playDeal();
     countdownValue.value = null;
+    // 游戏正式开始时停止倒计时音效
+    soundManager.stopGameStart();
+    disconnectedPlayers.value = new Set();
+    leftPlayers.value = [];
   });
 
   socketService.onGameOver((data) => {
     lastWinnerIds.value = data.winnerIds || (data.winnerId ? [data.winnerId] : []);
     actionRemainingSeconds.value = null;
+    // 如果当前用户是赢家，播放胜利音效
+    if (data.winnerIds?.includes(userId.value) || data.winnerId === userId.value) {
+      soundManager.playWin();
+    }
   });
 
   socketService.onCardsRevealed((data) => {
@@ -339,8 +486,59 @@ onMounted(async () => {
     alert(data.message);
   });
 
+  // 监听服务器广播的音效事件
+  socketService.onPlaySound((data) => {
+    if (data.sound === 'door') {
+      soundManager.playDoor();
+    }
+  });
+
   socketService.onRebuyRequired((data) => {
     alert(data.message || '筹码不足，请重新买入');
+  });
+
+
+  // 断线重连事件监听
+  socketService.onDisconnect(() => {
+    isDisconnected.value = true;
+    isReconnecting.value = false;
+    reconnectFailed.value = false;
+    reconnectAttempt.value = 0;
+    // 暂停倒计时计时器
+    stopActionCountdown();
+    // 启动 30 秒超时计时器
+    if (disconnectTimer) clearTimeout(disconnectTimer);
+    disconnectTimer = setTimeout(() => {
+      reconnectFailed.value = true;
+    }, RECONNECT_TIMEOUT_MS);
+  });
+
+  // 连接成功时标记等待服务端同步（处理页面刷新的情况）
+  socketService.onConnect(() => {
+    pendingActionSync = true;
+  });
+
+  socketService.onReconnectAttempt((attempt) => {
+    isReconnecting.value = true;
+    reconnectAttempt.value = attempt;
+    reconnectFailed.value = false;
+  });
+
+  socketService.onReconnect(() => {
+    isDisconnected.value = false;
+    isReconnecting.value = false;
+    reconnectAttempt.value = 0;
+    reconnectFailed.value = false;
+    pendingActionSync = true; // 等待服务端同步倒计时
+    if (disconnectTimer) {
+      clearTimeout(disconnectTimer);
+      disconnectTimer = null;
+    }
+  });
+
+  socketService.onReconnectFailed(() => {
+    isReconnecting.value = false;
+    reconnectFailed.value = true;
   });
 });
 
@@ -357,6 +555,10 @@ onUnmounted(() => {
     clearTimeout(revealWindowTimer);
     revealWindowTimer = null;
   }
+  if (disconnectTimer) {
+    clearTimeout(disconnectTimer);
+    disconnectTimer = null;
+  }
 });
 
 watch(activeActionKey, (key) => {
@@ -367,12 +569,28 @@ watch(activeActionKey, (key) => {
     return;
   }
 
-  actionRemainingSeconds.value = ACTION_TIMEOUT;
+  // 断线期间或等待服务端同步时，不重置倒计时
+  if (isDisconnected.value || pendingActionSync) return;
+
+  startActionCountdown(ACTION_TIMEOUT);
+});
+
+// 监控玩家数量变化：倒计时期间有人离开则停止音效
+watch(() => players.value.filter(p => p.seatNumber !== null).length, (newCount, oldCount) => {
+  if (newCount < oldCount && countdownValue.value != null) {
+    console.log('[Sound] stopGameStart (players decreased during countdown)');
+    soundManager.stopGameStart();
+  }
+});
+
+function startActionCountdown(remainingSeconds: number) {
+  stopActionCountdown();
+  actionRemainingSeconds.value = remainingSeconds;
   actionCountdownTimer = setInterval(() => {
     if (actionRemainingSeconds.value === null) return;
     actionRemainingSeconds.value = Math.max(0, actionRemainingSeconds.value - 1);
   }, 1000);
-});
+}
 
 function stopActionCountdown() {
   if (!actionCountdownTimer) return;
@@ -386,6 +604,7 @@ function handleSelectSeat(seatNumber: number) {
 }
 
 function handleReady() {
+  soundManager.playButton();
   socketService.playerReady(roomCode.value);
 }
 
@@ -440,7 +659,40 @@ function handleTip(player: TablePlayer | GamePlayer | RoomPlayer) {
 }
 
 function handleRevealCards() {
+  soundManager.playButton();
   socketService.revealCards(roomCode.value);
+}
+
+// 用户主动离开房间（仅点击"离开"按钮时触发）
+function handleLeaveRoom() {
+  // 根据玩家状态和游戏状态显示不同的确认文案
+  const myStatus = players.value.find(p => p.userId === userId.value)?.status;
+  const isGameInProgress = gameStore.gameState?.status === 'playing';
+
+  let confirmMessage = '确定离开房间吗？';
+  if (isGameInProgress && myStatus === 'playing') {
+    confirmMessage = '正在游戏中，确定离开吗？已投入的筹码将不会退还';
+  }
+
+  if (!confirm(confirmMessage)) {
+    return;
+  }
+
+  // 播放离开音效并通知服务器广播给房间内其他成员
+  soundManager.playDoor();
+  socketService.leaveRoom(roomCode.value);
+  userStore.clearUser();
+  roomStore.clearRoom();
+  gameStore.clearGame();
+  router.push('/');
+}
+
+// 重连超时后返回首页
+function handleGoHome() {
+  userStore.clearUser();
+  roomStore.clearRoom();
+  gameStore.clearGame();
+  router.push('/');
 }
 </script>
 
@@ -460,6 +712,10 @@ function handleRevealCards() {
 .room-header {
   width: 100%;
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
 h2 {
@@ -468,6 +724,21 @@ h2 {
   font-size: 18px;
   line-height: 1.2;
   text-align: center;
+}
+
+.leave-btn {
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.leave-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .game-layout {
@@ -523,6 +794,10 @@ h2 {
     gap: 6px;
     height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
     overflow: hidden;
+  }
+
+  .table-zone {
+    align-items: flex-start;
   }
 
   .control-zone {

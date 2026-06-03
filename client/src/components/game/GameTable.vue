@@ -2,7 +2,13 @@
   <div class="game-table">
     <div class="table-surface">
       <CommunityCards :cards="communityCards" />
-      <div class="pot" v-if="pot > 0">底池: {{ pot }}</div>
+      <template v-if="pot > 0">
+        <div v-if="sidePots.length > 0" class="pots-container">
+          <div class="pot pot-main">主池: {{ mainPotAmount }}</div>
+          <div v-for="(sp, i) in sidePots" :key="i" class="pot pot-side">边池: {{ sp.amount }}</div>
+        </div>
+        <div v-else class="pot">底池: {{ pot }}</div>
+      </template>
       <button
         v-if="winnerCanReveal"
         class="reveal-btn"
@@ -24,6 +30,7 @@
         :is-me="player.userId === userId"
         :is-current-player="player.seatNumber === currentSeatNumber"
         :is-winner="winnerIds.includes(player.userId)"
+        :disconnected="disconnectedPlayerIds?.has(player.userId) ?? false"
         :my-cards="getPlayerCards(player)"
         :emojis="getPlayerEmojis(player.userId)"
         :action-remaining-seconds="player.seatNumber === currentSeatNumber ? actionRemainingSeconds : null"
@@ -62,7 +69,7 @@ import { computed } from 'vue';
 import PlayerSeat from './PlayerSeat.vue';
 import CommunityCards from './CommunityCards.vue';
 import HandDisplay from './HandDisplay.vue';
-import type { Card, GamePlayer } from '../../../../shared/types/game.types';
+import type { Card, GamePlayer, SidePot } from '../../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../../shared/types/room.types';
 
 interface ShowdownPlayerData {
@@ -81,11 +88,14 @@ const props = defineProps<{
   players: TablePlayer[];
   communityCards: Card[];
   pot: number;
+  mainPotAmount: number;
+  sidePots: SidePot[];
   currentPlayerIndex: number;
   userId: string;
   myCards: Card[];
   winnerId?: string;
   winnerIds?: string[];
+  disconnectedPlayerIds?: Set<string>;
   activeEmojis: { id: number; userId: string; emoji: string }[];
   actionRemainingSeconds?: number | null;
   showReadyButton?: boolean;
@@ -238,6 +248,18 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   font-weight: bold;
 }
 
+.pots-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.pot-side {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
 .reveal-btn {
   padding: 6px 20px;
   font-size: 14px;
@@ -352,6 +374,10 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
 
   .pot {
     font-size: 13px;
+  }
+
+  .pot-side {
+    font-size: 11px;
   }
 
   .winning-hand-banner {

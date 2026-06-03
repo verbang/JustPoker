@@ -99,6 +99,7 @@ export class GameEngine {
       return this.dealRemainingCardsAndShowdown(initialState);
     }
 
+    this.updateSidePots(initialState);
     return initialState;
   }
 
@@ -282,8 +283,18 @@ export class GameEngine {
     // Mark this player as having acted
     this.actedPlayers.add(userId);
 
+    // Record last action for frontend sound effects
+    newState.lastAction = { userId, action, amount };
+
     // Check if round is complete
-    return this.checkRoundComplete(newState);
+    const result = this.checkRoundComplete(newState);
+    this.updateSidePots(result);
+    return result;
+  }
+
+  private updateSidePots(state: GameState): void {
+    const pots = PotCalculator.calculatePots(state.players);
+    state.sidePots = pots.sidePots;
   }
 
   private getLastFullRaiseBet(state: GameState): number {
@@ -314,7 +325,9 @@ export class GameEngine {
     this.actedPlayers.add(userId);
 
     if (newState.currentPlayerIndex === playerIndex) {
-      return this.checkRoundComplete(newState);
+      const result = this.checkRoundComplete(newState);
+      this.updateSidePots(result);
+      return result;
     }
 
     const activePlayers = newState.players.filter(p => p.status !== 'folded');
@@ -322,6 +335,7 @@ export class GameEngine {
       return this.finishGame(newState, activePlayers[0].userId);
     }
 
+    this.updateSidePots(newState);
     return newState;
   }
 
@@ -411,6 +425,7 @@ export class GameEngine {
 
     // 翻牌后从 Button 左侧第一个仍可行动玩家开始。Heads-up 时这会自然落在 BB。
     newState.currentPlayerIndex = this.findNextActionableIndex(newState, state.dealerIndex);
+    this.updateSidePots(newState);
 
     return newState;
   }

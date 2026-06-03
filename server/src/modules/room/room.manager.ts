@@ -206,6 +206,55 @@ export class RoomManager {
     return result;
   }
 
+  /**
+   * 转移房主权限给下一个座位的玩家
+   * 按照座位次序：座位号大于当前房主的最小座位号，如果不存在则从最小座位号开始
+   * 返回新房主的 userId，如果没有其他玩家则返回 null
+   */
+  transferHost(roomCode: string, currentHostId: string): string | null {
+    const room = this.rooms.get(roomCode);
+    const players = this.roomPlayers.get(roomCode);
+    if (!room || !players) return null;
+
+    const currentHost = players.get(currentHostId);
+    if (!currentHost) return null;
+
+    const currentSeatNumber = currentHost.seatNumber || 0;
+
+    // 获取所有已选座的玩家（排除当前房主）
+    const seatedPlayers = Array.from(players.values())
+      .filter(p => p.userId !== currentHostId && p.seatNumber !== null)
+      .sort((a, b) => (a.seatNumber || 0) - (b.seatNumber || 0));
+
+    if (seatedPlayers.length === 0) {
+      // 没有其他玩家，不设置新房主
+      return null;
+    }
+
+    // 查找座位号大于当前房主的最小座位玩家
+    const nextPlayer = seatedPlayers.find(p => (p.seatNumber || 0) > currentSeatNumber);
+
+    // 如果找到，转移给该玩家；否则从最小座位号开始
+    const newHost = nextPlayer || seatedPlayers[0];
+    room.hostId = newHost.userId;
+    return newHost.userId;
+  }
+
+  /**
+   * 重置房间内所有玩家的状态为 'seated'
+   * 用于倒计时取消时，将所有已准备的玩家重置为未准备状态
+   */
+  resetAllPlayersToSeated(roomCode: string): void {
+    const players = this.roomPlayers.get(roomCode);
+    if (!players) return;
+
+    for (const player of players.values()) {
+      if (player.status === 'ready' || player.status === 'playing') {
+        player.status = 'seated';
+      }
+    }
+  }
+
   getRoom(roomCode: string): Room | null {
     return this.rooms.get(roomCode) || null;
   }

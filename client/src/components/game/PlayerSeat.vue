@@ -31,6 +31,7 @@
       <span v-if="player.isDealer" class="badge dealer">BTN</span>
       <span v-if="player.isSmallBlind" class="badge sb">SB</span>
       <span v-if="player.isBigBlind" class="badge bb">BB</span>
+      <span v-if="disconnected" class="badge disconnected">断线</span>
     </div>
 
     <!-- Winner crown -->
@@ -102,6 +103,7 @@ const props = defineProps<{
   isMe: boolean;
   isCurrentPlayer: boolean;
   isWinner?: boolean;
+  disconnected?: boolean;
   myCards?: Card[];
   emojis?: { id: number; userId: string; emoji: string }[];
   actionRemainingSeconds?: number | null;
@@ -236,6 +238,16 @@ function handleTip() {
 
 .badge.bb {
   background: #f44336;
+}
+
+.badge.disconnected {
+  background: #78909c;
+  animation: pulse-disconnect 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-disconnect {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* Emoji container */

@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { SOCKET_EVENTS } from '../../../shared/constants/socket.constants';
 import type { Card, GameState, PlayerAction } from '../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../shared/types/room.types';
+import { useUserStore } from '../stores/user';
 
 interface RoomUpdatePayload {
   players: RoomPlayer[];
@@ -9,8 +10,10 @@ interface RoomUpdatePayload {
 
 interface UserEventPayload {
   userId: string;
+  reason?: 'leave' | 'disconnect' | 'timeout';
   reconnected?: boolean;
   reconnecting?: boolean;
+  remainingMs?: number;
 }
 
 interface EmojiPayload {
@@ -29,8 +32,21 @@ interface RebuyRequiredPayload {
 
 class SocketService {
   private socket: Socket | null = null;
+  private _isReconnecting = false;
+  private _reconnectAttempt = 0;
+  private _reconnectFailed = false;
+
+  get isReconnecting() { return this._isReconnecting; }
+  get reconnectAttempt() { return this._reconnectAttempt; }
+  get reconnectFailed() { return this._reconnectFailed; }
 
   connect(): void {
+    // 如果已有连接，先断开
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+    }
+
     const backendUrl = import.meta.env.VITE_WS_URL;
     this.socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
@@ -38,11 +54,41 @@ class SocketService {
 
     this.socket.on('connect', () => {
       console.log('Connected to server');
+      this._isReconnecting = false;
+      this._reconnectAttempt = 0;
+      this._reconnectFailed = false;
+      // 重连后自动加入房间
+      this.tryAutoRejoin();
     });
 
     this.socket.on('disconnect', () => {
       console.log('Disconnected from server');
     });
+
+    this.socket.on('reconnect_attempt', (attempt: number) => {
+      this._isReconnecting = true;
+      this._reconnectAttempt = attempt;
+      this._reconnectFailed = false;
+    });
+
+    this.socket.on('reconnect', () => {
+      this._isReconnecting = false;
+      this._reconnectAttempt = 0;
+      this._reconnectFailed = false;
+    });
+
+    this.socket.on('reconnect_failed', () => {
+      this._isReconnecting = false;
+      this._reconnectFailed = true;
+    });
+  }
+
+  private tryAutoRejoin(): void {
+    const userStore = useUserStore();
+    const roomCode = userStore.roomCode;
+    if (roomCode && userStore.userId) {
+      this.joinRoom(roomCode, userStore.userId);
+    }
   }
 
   disconnect(): void {
@@ -114,6 +160,10 @@ class SocketService {
     this.socket?.on(SOCKET_EVENTS.REBUY_REQUIRED, callback);
   }
 
+  onActionTimeoutSync(callback: (data: { remainingMs: number }) => void): void {
+    this.socket?.on('action-timeout-sync', callback);
+  }
+
   onGameOver(callback: (data: { winnerId?: string; winnerIds: string[] }) => void): void {
     this.socket?.on(SOCKET_EVENTS.GAME_OVER, callback);
   }
@@ -126,6 +176,10 @@ class SocketService {
     this.socket?.on(SOCKET_EVENTS.CARDS_REVEALED, callback);
   }
 
+  onPlaySound(callback: (data: { sound: string }) => void): void {
+    this.socket?.on(SOCKET_EVENTS.PLAY_SOUND, callback);
+  }
+
   off(event: string, callback?: (...args: unknown[]) => void): void {
     if (callback) {
       this.socket?.off(event, callback);
@@ -136,6 +190,34 @@ class SocketService {
 
   offAll(): void {
     this.socket?.removeAllListeners();
+  }
+
+  onDisconnect(callback: () => void): void {
+    this.socket?.on('disconnect', callback);
+  }
+
+  onReconnectAttempt(callback: (attempt: number) => void): void {
+    this.socket?.on('reconnect_attempt', callback);
+  }
+
+  onReconnect(callback: () => void): void {
+    this.socket?.on('reconnect', callback);
+  }
+
+  onReconnectFailed(callback: () => void): void {
+    this.socket?.on('reconnect_failed', callback);
+  }
+
+  onConnect(callback: () => void): void {
+    this.socket?.on('connect', callback);
+  }
+
+  offDisconnect(callback?: () => void): void {
+    if (callback) {
+      this.socket?.off('disconnect', callback);
+    } else {
+      this.socket?.off('disconnect');
+    }
   }
 }
 

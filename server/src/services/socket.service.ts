@@ -18,10 +18,11 @@ class SocketService {
   private dealerSeatNumbers: Map<string, number> = new Map();
   private countdowns: Map<string, NodeJS.Timeout> = new Map();
   private actionTimers: Map<string, NodeJS.Timeout> = new Map();
+  private actionTimeoutStart: Map<string, number> = new Map();
   private reconnectTimers: Map<string, NodeJS.Timeout> = new Map();
   private userSockets: Map<string, string> = new Map();
   // 保存断线玩家的信息，用于重连恢复
-  private disconnectedPlayers: Map<string, { userId: string; roomCode: string; timestamp: number }> = new Map();
+  private disconnectedPlayers: Map<string, { userId: string; roomCode: string; timestamp: number; actionElapsedMs: number }> = new Map();
   // 断线重连超时时间（30秒）
   private readonly RECONNECT_TIMEOUT_MS = 30000;
   // 表情发送限流记录
@@ -67,9 +68,6 @@ class SocketService {
           this.disconnectedPlayers.delete(disconnectedKey);
           this.clearReconnectTimeout(disconnectedKey);
           logger.info(`玩家 ${data.userId} 重连成功`);
-
-          // 通知其他玩家重连成功
-          this.emitToRoom(data.roomCode, SOCKET_EVENTS.PLAYER_JOINED, { userId: data.userId, reconnected: true });
         }
 
         const players = roomService.getRoomPlayers(data.roomCode);
@@ -78,10 +76,26 @@ class SocketService {
         // If game is in progress, send current game state to the joining player
         const gameState = this.gameStates.get(data.roomCode);
         if (gameState) {
-          this.emitToSocket(socket.id, SOCKET_EVENTS.GAME_UPDATE, gameState);
-          const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-          if (disconnectedInfo && gameState.status === 'playing' && currentPlayer?.userId === data.userId) {
-            this.scheduleActionTimeout(data.roomCode, gameState);
+          // 重连玩家发送带剩余时间的游戏状态
+          if (disconnectedInfo && gameState.status === 'playing') {
+            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            // 如果当前行动玩家就是重连玩家，需要恢复服务端超时计时器
+            if (currentPlayer?.userId === data.userId) {
+              const remainingMs = Math.max(0, ACTION_TIMEOUT * 1000 - (disconnectedInfo.actionElapsedMs || 0));
+              this.scheduleActionTimeout(data.roomCode, gameState, remainingMs);
+            }
+            // 所有重连玩家都发送带剩余时间的游戏状态
+            const syncRemainingMs = this.getActionRemainingMs(data.roomCode);
+            this.emitToSocket(socket.id, SOCKET_EVENTS.GAME_UPDATE, { ...gameState, actionRemainingMs: syncRemainingMs });
+
+            // 广播重连成功事件给房间所有人（携带剩余时间）
+            const joinPayload: Record<string, unknown> = { userId: data.userId, reconnected: true };
+            if (currentPlayer?.userId === data.userId) {
+              joinPayload.remainingMs = syncRemainingMs;
+            }
+            this.emitToRoom(data.roomCode, SOCKET_EVENTS.PLAYER_JOINED, joinPayload);
+          } else {
+            this.emitToSocket(socket.id, SOCKET_EVENTS.GAME_UPDATE, gameState);
           }
         }
 
@@ -104,12 +118,83 @@ class SocketService {
 
       // Leave room
       socket.on(SOCKET_EVENTS.LEAVE_ROOM, (data: { roomCode: string }) => {
-        socket.leave(data.roomCode);
-        roomService.leaveRoom(data.roomCode, socket.data.userId);
+        const userId = socket.data.userId as string;
+        const roomCode = data.roomCode;
 
-        const players = roomService.getRoomPlayers(data.roomCode);
-        this.emitToRoom(data.roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
-        this.emitToRoom(data.roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId: socket.data.userId });
+        // 清除断线重连记录（如果有）
+        const disconnectedKey = `${roomCode}:${userId}`;
+        this.disconnectedPlayers.delete(disconnectedKey);
+        this.clearReconnectTimeout(disconnectedKey);
+
+        // 检查是否在游戏中
+        const gameState = this.gameStates.get(roomCode);
+        if (gameState) {
+          const player = gameState.players.find(p => p.userId === userId);
+          if (player && player.status === 'playing') {
+            // 游戏中离开：自动弃牌
+            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            const isCurrentPlayer = currentPlayer?.userId === userId;
+
+            // 清除行动超时计时器（如果是当前行动玩家）
+            if (isCurrentPlayer) {
+              this.clearActionTimeout(roomCode);
+            }
+
+            // 调用 forceFold 弃牌
+            try {
+              const engine = this.gameEngines.get(roomCode);
+              if (engine) {
+                const newState = engine.forceFold(gameState, userId);
+                this.gameStates.set(roomCode, newState);
+
+                // 检查游戏是否结束
+                if (newState.status === 'finished') {
+                  this.handleGameFinished(roomCode, newState);
+                } else if (isCurrentPlayer) {
+                  // 游戏继续，安排下一个玩家的行动超时
+                  this.scheduleActionTimeout(roomCode, newState);
+                }
+
+                this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, newState);
+              }
+            } catch (error) {
+              logger.error(`玩家 ${userId} 离开时弃牌失败: ${error}`);
+            }
+          }
+        }
+
+        // 检查是否在倒计时中
+        const countdown = this.countdowns.get(roomCode);
+        if (countdown) {
+          // 取消倒计时
+          logger.info(`房间 ${roomCode} 倒计时取消: 玩家 ${userId} 离开`);
+          clearInterval(countdown);
+          this.countdowns.delete(roomCode);
+          // 广播倒计时取消
+          this.emitToRoom(roomCode, SOCKET_EVENTS.COUNTDOWN_START, { count: null });
+          // 将所有玩家状态重置为 'seated'
+          roomService.getRoomManager().resetAllPlayersToSeated(roomCode);
+        }
+
+        // 检查是否是房主，如果是则转移房主
+        const room = roomService.getRoom(roomCode);
+        if (room && room.hostId === userId) {
+          const newHostId = roomService.getRoomManager().transferHost(roomCode, userId);
+          if (newHostId) {
+            logger.info(`房间 ${roomCode} 房主从 ${userId} 转移给 ${newHostId}`);
+          }
+        }
+
+        // 从房间移除玩家
+        socket.leave(roomCode);
+        roomService.leaveRoom(roomCode, userId);
+
+        // 广播房间更新和玩家离开事件
+        const players = roomService.getRoomPlayers(roomCode);
+        this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
+        this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId, reason: 'leave' });
+        // 广播离开音效给房间内其他成员
+        this.emitToRoom(roomCode, SOCKET_EVENTS.PLAY_SOUND, { sound: 'door' });
       });
 
       // Select seat
@@ -224,17 +309,20 @@ class SocketService {
             const player = gameState.players.find(p => p.userId === userId);
             if (player && player.status === 'playing') {
               // 保存断线玩家信息，等待重连
+              let actionElapsedMs = 0;
+              const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+              const isCurrentActor = currentPlayer?.userId === userId;
+              if (isCurrentActor) {
+                actionElapsedMs = this.clearActionTimeout(roomCode);
+              }
+
               this.disconnectedPlayers.set(`${roomCode}:${userId}`, {
                 userId,
                 roomCode,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                actionElapsedMs,
               });
               logger.info(`玩家 ${userId} 在游戏中断线，等待重连...`);
-
-              const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-              if (currentPlayer?.userId === userId) {
-                this.clearActionTimeout(roomCode);
-              }
 
               // 设置重连超时
               const disconnectedKey = `${roomCode}:${userId}`;
@@ -251,14 +339,41 @@ class SocketService {
               }, this.RECONNECT_TIMEOUT_MS);
               this.reconnectTimers.set(disconnectedKey, reconnectTimer);
 
-              // 通知其他玩家有玩家断线
-              this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId, reconnecting: true });
+              // 通知其他玩家有玩家断线，当前行动玩家断线时携带剩余时间
+              const payload: Record<string, unknown> = { userId, reason: 'disconnect', reconnecting: true };
+              if (isCurrentActor) {
+                payload.remainingMs = Math.max(0, ACTION_TIMEOUT * 1000 - actionElapsedMs);
+              }
+              this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, payload);
               return; // 不立即从房间移除，等待重连或超时
             }
           }
 
-          // 非游戏中断线，直接移除
-          this.handlePlayerLeaveRoom(roomCode, userId);
+          // 非游戏中断线，也给 30 秒重连窗口
+          this.disconnectedPlayers.set(`${roomCode}:${userId}`, {
+            userId,
+            roomCode,
+            timestamp: Date.now(),
+            actionElapsedMs: 0,
+          });
+          logger.info(`玩家 ${roomCode}:${userId} 在非游戏状态断线，等待重连...`);
+
+          const disconnectedKey = `${roomCode}:${userId}`;
+          this.clearReconnectTimeout(disconnectedKey);
+          const reconnectTimer = setTimeout(() => {
+            const disconnectedInfo = this.disconnectedPlayers.get(disconnectedKey);
+            if (disconnectedInfo) {
+              logger.info(`玩家 ${userId} 非游戏状态重连超时，移除`);
+              this.disconnectedPlayers.delete(disconnectedKey);
+              this.reconnectTimers.delete(disconnectedKey);
+              this.handlePlayerLeaveRoom(roomCode, userId);
+            }
+          }, this.RECONNECT_TIMEOUT_MS);
+          this.reconnectTimers.set(disconnectedKey, reconnectTimer);
+
+          // 通知其他玩家有玩家断线
+          this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId, reason: 'disconnect', reconnecting: true });
+          return;
         }
       });
     });
@@ -459,7 +574,7 @@ class SocketService {
     logger.info(`Game finished in room ${roomCode}, winner: ${gameState.winnerId}`);
   }
 
-  private scheduleActionTimeout(roomCode: string, gameState: GameState): void {
+  private scheduleActionTimeout(roomCode: string, gameState: GameState, remainingMs?: number): void {
     this.clearActionTimeout(roomCode);
 
     if (gameState.status !== 'playing') return;
@@ -470,19 +585,39 @@ class SocketService {
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     if (!currentPlayer || currentPlayer.status !== 'playing') return;
 
+    const timeoutMs = remainingMs ?? ACTION_TIMEOUT * 1000;
+    // 如果是恢复倒计时，需要回推原始开始时间
+    const startOffset = remainingMs != null ? ACTION_TIMEOUT * 1000 - remainingMs : 0;
+    this.actionTimeoutStart.set(roomCode, Date.now() - startOffset);
+
     const timer = setTimeout(() => {
       this.handleActionTimeout(roomCode, currentPlayer.userId);
-    }, ACTION_TIMEOUT * 1000);
+    }, timeoutMs);
 
     this.actionTimers.set(roomCode, timer);
   }
 
-  private clearActionTimeout(roomCode: string): void {
+  private clearActionTimeout(roomCode: string): number {
     const timer = this.actionTimers.get(roomCode);
-    if (!timer) return;
+    if (!timer) return 0;
 
     clearTimeout(timer);
     this.actionTimers.delete(roomCode);
+
+    // 计算已消耗的时间
+    const start = this.actionTimeoutStart.get(roomCode);
+    this.actionTimeoutStart.delete(roomCode);
+    if (!start) return 0;
+
+    const elapsed = Date.now() - start;
+    return Math.min(elapsed, ACTION_TIMEOUT * 1000);
+  }
+
+  private getActionRemainingMs(roomCode: string): number {
+    const start = this.actionTimeoutStart.get(roomCode);
+    if (!start) return ACTION_TIMEOUT * 1000;
+    const elapsed = Date.now() - start;
+    return Math.max(0, ACTION_TIMEOUT * 1000 - elapsed);
   }
 
   private clearReconnectTimeout(disconnectedKey: string): void {
@@ -582,10 +717,19 @@ class SocketService {
    * 处理玩家离开房间
    */
   private handlePlayerLeaveRoom(roomCode: string, userId: string): void {
+    // 检查是否是房主，如果是则转移房主
+    const room = roomService.getRoom(roomCode);
+    if (room && room.hostId === userId) {
+      const newHostId = roomService.getRoomManager().transferHost(roomCode, userId);
+      if (newHostId) {
+        logger.info(`房间 ${roomCode} 房主从 ${userId} 转移给 ${newHostId}`);
+      }
+    }
+
     roomService.leaveRoom(roomCode, userId);
     const players = roomService.getRoomPlayers(roomCode);
     this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
-    this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId });
+    this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId, reason: 'timeout' });
   }
 
   /**

@@ -63,17 +63,28 @@ export class PotCalculator {
     pots: Pot[],
     winnerIds: string[]
   ): Map<string, number> {
-    const winnings = new Map<string, number>();
+    // 按有资格的赢家集合分组底池，合并后再统一分配余码，
+    // 避免同一组平局玩家在多个底池中重复获得余码。
+    const groups = new Map<string, { totalAmount: number; eligibleWinners: string[] }>();
 
     for (const pot of pots) {
-      // Find winners eligible for this pot
       const eligibleWinners = winnerIds.filter(id => pot.eligiblePlayerIds.includes(id));
-
       if (eligibleWinners.length === 0) continue;
 
-      // Split pot among winners
-      const baseAmount = Math.floor(pot.amount / eligibleWinners.length);
-      const remainder = pot.amount % eligibleWinners.length;
+      const key = [...eligibleWinners].sort().join(',');
+      const existing = groups.get(key);
+      if (existing) {
+        existing.totalAmount += pot.amount;
+      } else {
+        groups.set(key, { totalAmount: pot.amount, eligibleWinners });
+      }
+    }
+
+    const winnings = new Map<string, number>();
+
+    for (const { totalAmount, eligibleWinners } of groups.values()) {
+      const baseAmount = Math.floor(totalAmount / eligibleWinners.length);
+      const remainder = totalAmount % eligibleWinners.length;
 
       eligibleWinners.forEach((winnerId, index) => {
         const amount = baseAmount + (index < remainder ? 1 : 0);

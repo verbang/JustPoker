@@ -3,7 +3,7 @@
     <h2>创建房间</h2>
     <NicknameInput
       label="设置昵称"
-      placeholder="2-10个字符"
+      placeholder="1-5个字符"
       :existing-nicknames="[]"
       @update:nickname="nickname = $event"
       @valid="isNicknameValid = $event"
@@ -37,6 +37,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 import { roomApi } from '../../services/api';
 import { useUserStore } from '../../stores/user';
 import { useRoomStore } from '../../stores/room';
@@ -83,12 +84,16 @@ async function createRoom() {
     );
     const { roomCode, roomId, userId } = response.data;
 
-    userStore.setUser(userId, nickname.value);
+    userStore.setUser(userId, nickname.value, roomCode);
     roomStore.setRoom(roomCode, roomId, initialChips.value, actionTimeoutEnabled.value);
 
     router.push(`/room/${roomCode}`);
   } catch (error) {
     console.error('Failed to create room:', error);
+    if (axios.isAxiosError<{ error?: string }>(error)) {
+      errorMessage.value = error.response?.data?.error || '创建房间失败';
+      return;
+    }
     errorMessage.value = '创建房间失败，请稍后重试';
   }
 }

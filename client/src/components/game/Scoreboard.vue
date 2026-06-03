@@ -14,7 +14,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="player in displayPlayers" :key="player.userId">
+          <tr v-for="player in displayPlayers" :key="player.userId" :class="{ 'left-player': player.displayStatus === 'left' }">
             <td>{{ player.nickname }}</td>
             <td>{{ player.chips }}</td>
             <td>{{ getStatusText(player.displayStatus) }}</td>
@@ -63,10 +63,11 @@ const props = defineProps<{
     status: GameState['status'];
     players: { userId: string; status: GamePlayer['status'] }[];
   } | null;
+  leftPlayers?: { userId: string; nickname: string; chips: number }[];
 }>();
 
 const displayPlayers = computed<DisplayPlayer[]>(() => {
-  return props.players.map(p => {
+  const activePlayers = props.players.map(p => {
     // During an active hand, prefer game-level status; after finish, room status carries ready state.
     let displayStatus: DisplayStatus = p.status;
     if (props.gameState?.status === 'playing') {
@@ -77,6 +78,20 @@ const displayPlayers = computed<DisplayPlayer[]>(() => {
     }
     return { ...p, displayStatus };
   });
+
+  // 添加已离开的玩家（仅在游戏中离开的玩家）
+  const leftPlayers = (props.leftPlayers || [])
+    .filter(lp => !props.players.some(p => p.userId === lp.userId))
+    .map(lp => ({
+      ...lp,
+      roomId: '',
+      seatNumber: null,
+      status: 'left' as const,
+      joinedAt: new Date(),
+      displayStatus: 'left' as DisplayStatus,
+    }));
+
+  return [...activePlayers, ...leftPlayers];
 });
 
 const showScoreboard = ref(true);
@@ -206,6 +221,7 @@ function getStatusText(status: DisplayStatus): string {
     out: '已出局',
     finished: '已结束',
     waiting: '等待中',
+    left: '已离开',
   };
   return statusMap[status] || status;
 }
@@ -259,6 +275,14 @@ th {
 
 td {
   font-size: 14px;
+}
+
+.left-player {
+  opacity: 0.5;
+}
+
+.left-player td {
+  color: #999;
 }
 
 .hand-reference-toggle {

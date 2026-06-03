@@ -2,8 +2,23 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { roomService } from './room.service';
 import { CreateRoomRequest, JoinRoomRequest, Room } from '../../../../shared/types/room.types';
+import { NICKNAME_MIN_LENGTH, NICKNAME_MAX_LENGTH, NICKNAME_REGEX } from '../../../../shared/constants/game.constants';
 
 const router = Router();
+
+// 昵称验证函数
+function validateNickname(nickname: string): string | null {
+  if (!nickname || nickname.length < NICKNAME_MIN_LENGTH) {
+    return `昵称至少${NICKNAME_MIN_LENGTH}个字符`;
+  }
+  if (nickname.length > NICKNAME_MAX_LENGTH) {
+    return `昵称最多${NICKNAME_MAX_LENGTH}个字符`;
+  }
+  if (!NICKNAME_REGEX.test(nickname)) {
+    return '昵称仅支持中文、英文、数字';
+  }
+  return null;
+}
 
 // Create room
 router.post('/', async (req: Request, res: Response) => {
@@ -12,6 +27,11 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (!nickname || !Number.isInteger(initialChips) || initialChips <= 0) {
       return res.status(400).json({ error: '缺少必填参数' });
+    }
+
+    const nicknameError = validateNickname(nickname);
+    if (nicknameError) {
+      return res.status(400).json({ error: nicknameError });
     }
 
     if (password && (!/^\d{4}$/.test(password))) {
@@ -49,6 +69,11 @@ router.post('/:roomCode/join', async (req: Request, res: Response) => {
 
     if (!nickname || !Number.isInteger(chips) || chips <= 0) {
       return res.status(400).json({ error: '缺少必填参数' });
+    }
+
+    const nicknameError = validateNickname(nickname);
+    if (nicknameError) {
+      return res.status(400).json({ error: nicknameError });
     }
 
     const room = roomService.getRoom(roomCode);

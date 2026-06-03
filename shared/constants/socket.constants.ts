@@ -24,4 +24,5 @@ export const SOCKET_EVENTS = {
   REBUY_REQUIRED: 'rebuy-required',
   TIP_RECEIVED: 'tip-received',
   CARDS_REVEALED: 'cards-revealed',
+  PLAY_SOUND: 'play-sound',
 } as const;

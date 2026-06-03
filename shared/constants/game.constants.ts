@@ -1,3 +1,8 @@
+// 昵称规则
+export const NICKNAME_MIN_LENGTH = 1;
+export const NICKNAME_MAX_LENGTH = 5;
+export const NICKNAME_REGEX = /^[一-龥a-zA-Z0-9]+$/;
+
 // 筹码档次
 export const CHIP_OPTIONS = [100, 200, 500] as const;
 export const DEFAULT_CHIPS = 100;

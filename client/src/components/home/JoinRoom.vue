@@ -10,7 +10,7 @@
     />
     <NicknameInput
       label="设置昵称"
-      placeholder="2-10个字符"
+      placeholder="1-5个字符"
       :existing-nicknames="existingNicknames"
       @update:nickname="nickname = $event"
       @valid="isNicknameValid = $event"
@@ -86,7 +86,7 @@ async function joinRoom() {
     const response = await roomApi.joinRoom(roomCode.value, nickname.value, chips.value, password.value || undefined);
     const { userId } = response.data;
 
-    userStore.setUser(userId, nickname.value);
+    userStore.setUser(userId, nickname.value, roomCode.value);
     router.push(`/room/${roomCode.value}`);
   } catch (error) {
     console.error('Failed to join room:', error);

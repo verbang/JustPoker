@@ -8,16 +8,16 @@ class SoundManager {
 
   private preloadSounds() {
     const soundFiles: Record<string, string> = {
-      join: '/sounds/join.mp3',
-      leave: '/sounds/leave.mp3',
+      gamestart: '/sounds/gamestart.mp3',
       deal: '/sounds/deal.mp3',
-      flip: '/sounds/flip.mp3',
       bet: '/sounds/bet.mp3',
+      raise: '/sounds/raise.mp3',
+      allin: '/sounds/allin.mp3',
       fold: '/sounds/fold.mp3',
-      emoji: '/sounds/emoji.mp3',
       win: '/sounds/win.mp3',
-      lose: '/sounds/lose.mp3',
-      yourTurn: '/sounds/your-turn.mp3',
+      yourTurn: '/sounds/yourTurn.mp3',
+      button: '/sounds/button.mp3',
+      door: '/sounds/door.mp3',
     };
 
     for (const [key, path] of Object.entries(soundFiles)) {
@@ -45,16 +45,25 @@ class SoundManager {
     }
   }
 
-  playJoin() { this.play('join'); }
-  playLeave() { this.play('leave'); }
+  stop(soundName: string) {
+    const sound = this.sounds.get(soundName);
+    if (sound) {
+      sound.pause();
+      sound.currentTime = 0;
+    }
+  }
+
+  playGameStart() { this.play('gamestart'); }
+  stopGameStart() { this.stop('gamestart'); }
   playDeal() { this.play('deal'); }
-  playFlip() { this.play('flip'); }
   playBet() { this.play('bet'); }
+  playRaise() { this.play('raise'); }
+  playAllIn() { this.play('allin'); }
   playFold() { this.play('fold'); }
-  playEmoji() { this.play('emoji'); }
   playWin() { this.play('win'); }
-  playLose() { this.play('lose'); }
   playYourTurn() { this.play('yourTurn'); }
+  playButton() { this.play('button'); }
+  playDoor() { this.play('door'); }
 }
 
 export const soundManager = new SoundManager();

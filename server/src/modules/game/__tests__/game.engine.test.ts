@@ -629,4 +629,45 @@ describe('GameEngine', () => {
     expect(result.status).toBe('playing');
     expect(result.currentPlayerIndex).toBe(2);
   });
+
+  test('应在玩家全下后实时填充 sidePots', () => {
+    // players 数组索引决定座位：index 0→dealer, index 1→SB, index 2→BB
+    // 行动顺序 preflop：index 0(dealer) → index 1(SB) → index 2(BB)
+    // Player 2(SB) 仅 7 筹码，SB 5 + call 2 → 全下 7 < BB 10，产生边池
+    const players = [
+      createPlayer({ userId: '1', seatNumber: 1, chips: 200 }),
+      createPlayer({ userId: '2', seatNumber: 2, chips: 7 }),
+      createPlayer({ userId: '3', seatNumber: 3, chips: 200 }),
+    ];
+    let state = engine.startGame('room1', players, 5, 10);
+
+    // Player 1 (dealer) calls
+    state = engine.playerAction(state, '1', 'call');
+    // Player 2 (SB) calls → all-in（SB 5 + call 2 = 7）
+    state = engine.playerAction(state, '2', 'call');
+    expect(state.players.find(p => p.userId === '2')!.status).toBe('all_in');
+    // 此时 sidePots 应已填充（Player 2 短码全下，边池 = (10-7)*2 = 6）
+    expect(state.sidePots.length).toBeGreaterThanOrEqual(1);
+    const sidePotsTotal = state.sidePots.reduce((sum, sp) => sum + sp.amount, 0);
+    expect(sidePotsTotal).toBeGreaterThan(0);
+  });
+
+  test('阶段切换后 sidePots 应保持正确', () => {
+    const players = [
+      createPlayer({ userId: '1', seatNumber: 1, chips: 200 }),
+      createPlayer({ userId: '2', seatNumber: 2, chips: 7 }),
+      createPlayer({ userId: '3', seatNumber: 3, chips: 200 }),
+    ];
+    let state = engine.startGame('room1', players, 5, 10);
+
+    // preflop: 1(dealer) calls, 2(SB) calls all-in, 3(BB) checks → flop
+    state = engine.playerAction(state, '1', 'call');
+    state = engine.playerAction(state, '2', 'call');
+    state = engine.playerAction(state, '3', 'check');
+
+    expect(state.phase).toBe('flop');
+    expect(state.sidePots.length).toBeGreaterThanOrEqual(1);
+    const sidePotsTotal = state.sidePots.reduce((sum, sp) => sum + sp.amount, 0);
+    expect(sidePotsTotal).toBeGreaterThan(0);
+  });
 });

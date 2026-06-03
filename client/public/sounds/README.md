@@ -1,14 +1,28 @@
 # Sound Files
 
-This directory should contain the following MP3 sound files:
+此目录包含 JustPoker 游戏的音效文件。
 
-- join.mp3 - Player joins the room
-- leave.mp3 - Player leaves the room
-- deal.mp3 - Cards are dealt
-- flip.mp3 - Community cards are revealed
-- bet.mp3 - Player places a bet
-- fold.mp3 - Player folds
-- emoji.mp3 - Player sends an emoji
-- win.mp3 - Player wins the pot
-- lose.mp3 - Player loses
-- your-turn.mp3 - Notification when it's your turn to act
+## 音效列表
+
+| 文件名 | 触发时机 | 播放范围 |
+|--------|---------|---------|
+| gamestart.mp3 | 游戏开始倒计时（3、2、1、GO!） | 本地 |
+| deal.mp3 | 发牌（公共牌翻牌：Flop/Turn/River） | 本地 |
+| bet.mp3 | 下注/跟注 | 本地 |
+| raise.mp3 | 加注 | 本地 |
+| allin.mp3 | 全下（All-in） | 本地 |
+| fold.mp3 | 弃牌 | 本地 |
+| win.mp3 | 当前玩家获胜 | 本地 |
+| yourTurn.mp3 | 轮到当前玩家行动 | 本地 |
+| button.mp3 | 点击【准备】或【亮牌】按钮 | 本地 |
+| door.mp3 | 玩家确认离开房间 | 广播（房间内所有成员） |
+
+## 文件格式
+
+- 格式：MP3
+- 建议大小：单个文件不超过 100KB
+- 来源：免费音效资源（CC0 授权）
+
+## 备注
+
+目录中可能包含旧版音效文件（join.mp3、leave.mp3、flip.mp3 等），这些文件当前未被使用，可安全删除。
