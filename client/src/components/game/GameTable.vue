@@ -4,10 +4,10 @@
       <CommunityCards :cards="communityCards" />
       <template v-if="pot > 0">
         <div v-if="sidePots.length > 0" class="pots-container">
-          <div class="pot pot-main">主池: {{ mainPotAmount }}</div>
-          <div v-for="(sp, i) in sidePots" :key="i" class="pot pot-side">边池: {{ sp.amount }}</div>
+          <div class="pot pot-main"><span class="pot-label">主池</span> ${{ mainPotAmount }}</div>
+          <div v-for="(sp, i) in sidePots" :key="i" class="pot pot-side"><span class="pot-label">边池</span> ${{ sp.amount }}</div>
         </div>
-        <div v-else class="pot">底池: {{ pot }}</div>
+        <div v-else class="pot"><span class="pot-label">底池</span> ${{ pot }}</div>
       </template>
       <button
         v-if="winnerCanReveal"
@@ -18,7 +18,7 @@
         亮牌
       </button>
       <div v-if="showdownMode && winningHandDescription" class="winning-hand-banner">
-        <span class="winning-hand-icon">&#x1F3C6;</span>
+        <span class="winning-hand-dot"></span>
         <span class="winning-hand-text">{{ winningHandDescription }}</span>
       </div>
     </div>
@@ -46,14 +46,6 @@
         class="my-seat-overlay"
         :style="mySeatOverlayStyle"
       >
-        <button
-          v-if="showReadyButton"
-          class="ready-btn"
-          type="button"
-          @click="$emit('ready')"
-        >
-          准备
-        </button>
         <HandDisplay
           v-if="handHoleCards.length && handCommunityCards.length"
           :hole-cards="handHoleCards"
@@ -98,7 +90,6 @@ const props = defineProps<{
   disconnectedPlayerIds?: Set<string>;
   activeEmojis: { id: number; userId: string; emoji: string }[];
   actionRemainingSeconds?: number | null;
-  showReadyButton?: boolean;
   handHoleCards?: Card[];
   handCommunityCards?: Card[];
   showdownMode?: boolean;
@@ -111,7 +102,6 @@ const winnerIds = computed(() => props.winnerIds || (props.winnerId ? [props.win
 
 defineEmits<{
   (e: 'tip', player: TablePlayer): void;
-  (e: 'ready'): void;
   (e: 'revealCards'): void;
 }>();
 
@@ -222,7 +212,7 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   min-height: 360px;
   margin: 0 auto;
   --my-seat-top: 88%;
-  --my-seat-overlay-offset: 82px;
+  --my-seat-overlay-offset: 96px;
 }
 
 .table-surface {
@@ -230,22 +220,39 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   top: 45%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 55%;
-  height: 38%;
-  background: #1b5e20;
+  width: 56%;
+  height: 40%;
+  background: linear-gradient(145deg, #0D2137, #132D4A);
   border-radius: 50%;
-  border: 8px solid #4e342e;
+  border: 6px solid #1A1A1A;
+  box-shadow:
+    inset 0 0 30px rgba(0,0,0,0.4),
+    0 0 0 3px #2C2C2C,
+    0 0 0 5px #1A1A1A,
+    0 4px 20px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .pot {
-  color: #ffd700;
-  font-size: 16px;
-  font-weight: bold;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--secondary);
+}
+
+.pot-label {
+  font-size: 12px;
+  color: #A1A1AA;
+  font-weight: 500;
+  margin-right: 2px;
+}
+
+.pot-main,
+.pot-side {
+  color: var(--secondary);
 }
 
 .pots-container {
@@ -256,32 +263,25 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
 }
 
 .pot-side {
-  font-size: 13px;
+  font-size: 14px;
   opacity: 0.85;
 }
 
 .reveal-btn {
   padding: 6px 20px;
-  font-size: 14px;
-  font-weight: bold;
+  font-size: 13px;
+  font-weight: 600;
   color: #fff;
   background: linear-gradient(135deg, #ff9800, #f57c00);
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 3px 8px rgba(255, 152, 0, 0.4);
-  animation: reveal-btn-pulse 1.5s ease-in-out infinite;
+  transition: all 200ms;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
 }
 
 .reveal-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 5px 12px rgba(255, 152, 0, 0.6);
-}
-
-@keyframes reveal-btn-pulse {
-  0%, 100% { box-shadow: 0 3px 8px rgba(255, 152, 0, 0.4); }
-  50% { box-shadow: 0 3px 16px rgba(255, 152, 0, 0.7); }
+  filter: brightness(1.15);
 }
 
 .winning-hand-banner {
@@ -289,21 +289,24 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   align-items: center;
   gap: 6px;
   padding: 6px 16px;
-  background: rgba(255, 215, 0, 0.15);
-  border: 1px solid rgba(255, 215, 0, 0.5);
+  background: rgba(202,138,4,0.1);
+  border: 1px solid rgba(202,138,4,0.3);
   border-radius: 20px;
   animation: banner-fade-in 0.6s ease-out;
 }
 
-.winning-hand-icon {
-  font-size: 16px;
+.winning-hand-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--secondary);
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .winning-hand-text {
-  color: #ffd700;
-  font-size: 14px;
-  font-weight: bold;
-  text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+  color: var(--secondary);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 @keyframes banner-fade-in {
@@ -332,36 +335,13 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   max-width: min(280px, 80vw);
 }
 
-.ready-btn {
-  min-height: 38px;
-  padding: 8px 28px;
-  font-size: 15px;
-  font-weight: bold;
-  color: #fff;
-  background: linear-gradient(135deg, #4caf50, #388e3c);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-}
-
-.ready-btn:hover {
-  transform: scale(1.04);
-  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.6);
-}
-
-.ready-btn:active {
-  transform: scale(0.98);
-}
-
 @media (orientation: landscape) and (max-width: 900px) {
   .game-table {
     height: 100%;
     min-height: 0;
     max-width: none;
     --my-seat-top: 76%;
-    --my-seat-overlay-offset: 52px;
+    --my-seat-overlay-offset: 68px;
   }
 
   .table-surface {
@@ -369,7 +349,7 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
     width: 54%;
     height: 42%;
     border-width: 5px;
-    gap: 5px;
+    gap: 6px;
   }
 
   .pot {
@@ -396,13 +376,6 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
     gap: 4px;
   }
 
-  .ready-btn {
-    min-height: 30px;
-    padding: 5px 18px;
-    font-size: 12px;
-    border-radius: 6px;
-  }
-
   .reveal-btn {
     padding: 4px 14px;
     font-size: 12px;
@@ -412,7 +385,7 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
 @media (max-height: 430px) and (orientation: landscape) {
   .game-table {
     --my-seat-top: 72%;
-    --my-seat-overlay-offset: 46px;
+    --my-seat-overlay-offset: 58px;
   }
 
   .table-surface {

@@ -29,31 +29,31 @@ const emojis = EMOJIS;
 
 <style scoped>
 .emoji-panel {
+  background: var(--surface-container);
+  border-radius: var(--radius-card);
+  padding: 12px;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 8px;
   flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
 
 .emoji-btn {
   width: 36px;
   height: 36px;
   border: none;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  font-size: 20px;
+  background: var(--surface-container-high);
+  border-radius: 8px;
+  font-size: 18px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 200ms;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .emoji-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--outline);
   transform: scale(1.1);
 }
 
@@ -63,9 +63,9 @@ const emojis = EMOJIS;
 }
 
 .cooldown {
-  color: #ff9800;
-  font-size: 12px;
-  margin-left: 8px;
+  font-size: 11px;
+  color: var(--secondary);
+  margin-left: 4px;
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
@@ -87,6 +87,13 @@ const emojis = EMOJIS;
     margin-left: 0;
     font-size: 10px;
     text-align: center;
+  }
+}
+
+@media (orientation: portrait) {
+  .emoji-panel {
+    flex: 1;
+    min-width: 200px;
   }
 }
 </style>

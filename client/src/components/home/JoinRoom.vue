@@ -1,38 +1,56 @@
 <template>
-  <div class="join-room">
-    <h2>加入房间</h2>
-    <input
-      v-model="roomCode"
-      placeholder="输入房间号"
-      maxlength="2"
-      inputmode="numeric"
-      @input="handleRoomCodeInput"
-    />
+  <div class="form-card">
+    <div class="form-card-header">
+      <div class="form-card-title">加入房间</div>
+      <button class="form-card-close" @click="$emit('back')">&times;</button>
+    </div>
+
+    <div class="field">
+      <label class="field-label">房间号</label>
+      <input
+        class="field-input"
+        v-model="roomCode"
+        placeholder="输入 2 位房间号"
+        maxlength="2"
+        inputmode="numeric"
+        @input="handleRoomCodeInput"
+      />
+    </div>
+
     <NicknameInput
-      label="设置昵称"
-      placeholder="1-5个字符"
+      label="昵称"
+      placeholder="1-5 个字符"
       :existing-nicknames="existingNicknames"
       @update:nickname="nickname = $event"
       @valid="isNicknameValid = $event"
     />
+
     <ChipSelector
-      label="设置带入筹码"
+      label="带入筹码"
       :options="[100, 200, 500]"
       v-model="chips"
     />
-    <div class="password-field">
-      <label>房间密码</label>
+
+    <div class="field">
+      <label class="field-label">房间密码</label>
       <input
+        class="field-input"
         v-model="password"
         type="text"
-        placeholder="4位数字（无密码可留空）"
+        placeholder="无密码可留空"
         maxlength="4"
         inputmode="numeric"
         @input="handlePasswordInput"
       />
     </div>
-    <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
-    <button :disabled="!isNicknameValid || !roomCode" @click="joinRoom">加入房间</button>
+
+    <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
+
+    <button
+      class="btn-primary"
+      :disabled="!isNicknameValid || !roomCode"
+      @click="joinRoom"
+    >加入房间</button>
   </div>
 </template>
 
@@ -44,6 +62,8 @@ import { roomApi } from '../../services/api';
 import { useUserStore } from '../../stores/user';
 import NicknameInput from '../common/NicknameInput.vue';
 import ChipSelector from '../common/ChipSelector.vue';
+
+defineEmits<{ (e: 'back'): void }>();
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -100,39 +120,114 @@ async function joinRoom() {
 </script>
 
 <style scoped>
-.password-field {
+.form-card {
+  background: var(--surface-container);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  border: 1px solid var(--outline);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.form-card-title {
+  font-family: 'Russo One', sans-serif;
+  font-size: 18px;
+  color: var(--on-surface);
+}
+
+.form-card-close {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background-color 200ms;
+  line-height: 1;
+}
+
+.form-card-close:hover {
+  background: var(--surface-container-high);
+}
+
+.field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.password-field label {
-  font-size: 14px;
-  color: #ccc;
+.field-label {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  font-weight: 500;
 }
 
-.password-field input {
-  padding: 10px 12px;
-  border: 1px solid #555;
-  border-radius: 6px;
-  background: #2a2a2a;
-  color: #fff;
-  font-size: 16px;
+.field-input {
+  padding: 12px 14px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-input);
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  font-size: 15px;
   outline: none;
+  transition: border-color 200ms, box-shadow 200ms;
 }
 
-.password-field input:focus {
-  border-color: #4caf50;
+.field-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
-.password-field input::placeholder {
-  color: #777;
+.field-input::placeholder {
+  color: var(--on-surface-variant);
+  opacity: 0.6;
 }
 
-.error-message {
-  margin: 0;
-  color: #ff6b6b;
-  font-size: 14px;
+.error-msg {
+  font-size: 13px;
+  color: var(--error);
   text-align: center;
+  margin: 0;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 14px 0;
+  border: none;
+  border-radius: var(--radius-button);
+  background: var(--primary);
+  color: #fff;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 200ms, transform 100ms;
+  margin-top: 4px;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.15);
+}
+
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary:disabled:hover {
+  background: var(--primary);
 }
 </style>

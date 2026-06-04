@@ -39,12 +39,14 @@
       <span class="crown">&#x1F451;</span>
     </div>
 
+    <!-- Action countdown (above badges) -->
+    <span v-if="isCurrentPlayer && actionRemainingSeconds !== null" class="action-countdown">
+      {{ actionRemainingSeconds }}
+    </span>
+
     <div class="player-info">
-      <span v-if="isCurrentPlayer && actionRemainingSeconds !== null" class="action-countdown">
-        {{ actionRemainingSeconds }}
-      </span>
       <span class="nickname" @click="handleTip">{{ player.nickname }}</span>
-      <span class="chips">&#x1F4B0; {{ player.chips }}</span>
+      <span class="chips">${{ player.chips }}</span>
       <span v-if="seatStatusText" class="seat-status" :class="`status-${player.status}`">
         {{ seatStatusText }}
       </span>
@@ -154,26 +156,22 @@ function handleTip() {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.55);
-  pointer-events: auto;
-  transition: all 0.3s ease;
-  min-width: 80px;
-  max-width: 110px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface-container);
   border: 2px solid transparent;
+  pointer-events: auto;
+  min-width: 86px;
+  max-width: 110px;
 }
 
 .player-seat.is-me {
-  border: 2px solid #4caf50;
-  background: rgba(0, 0, 0, 0.7);
+  border-color: var(--primary);
 }
 
 .player-seat.is-current {
-  border: 2px solid #FF513D;
-  box-shadow:
-    0 0 0 2px rgba(255, 81, 61, 0.4),
-    0 0 18px rgba(255, 81, 61, 0.8);
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.2), 0 0 16px rgba(239,68,68,0.3);
 }
 
 .player-seat.is-folded {
@@ -185,13 +183,13 @@ function handleTip() {
 }
 
 .player-seat.is-showdown-winner {
-  border: 2px solid #ffd700;
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+  border-color: var(--secondary);
+  box-shadow: 0 0 0 3px rgba(202,138,4,0.2), 0 0 12px rgba(202,138,4,0.3);
 }
 
 .player-seat.is-me.is-showdown-winner {
-  border: 2px solid #4caf50;
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(202,138,4,0.2), 0 0 12px rgba(202,138,4,0.3);
 }
 
 .action-ring {
@@ -199,7 +197,7 @@ function handleTip() {
   inset: -7px;
   border-radius: 14px;
   background:
-    conic-gradient(from -90deg, #FF513D var(--action-progress), rgba(255, 81, 61, 0.08) 0);
+    conic-gradient(from -90deg, var(--error) var(--action-progress), rgba(239,68,68,0.08) 0);
   pointer-events: none;
   z-index: -1;
 }
@@ -209,7 +207,7 @@ function handleTip() {
   position: absolute;
   inset: 5px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.74);
+  background: rgba(13,21,37,0.92);
 }
 
 /* Position badges */
@@ -229,19 +227,19 @@ function handleTip() {
 }
 
 .badge.dealer {
-  background: #ff9800;
+  background: #FF9800;
 }
 
 .badge.sb {
-  background: #2196f3;
+  background: #2196F3;
 }
 
 .badge.bb {
-  background: #f44336;
+  background: #F44336;
 }
 
 .badge.disconnected {
-  background: #78909c;
+  background: #64748B;
   animation: pulse-disconnect 1.5s ease-in-out infinite;
 }
 
@@ -311,21 +309,16 @@ function handleTip() {
 }
 
 .action-countdown {
-  position: absolute;
-  top: -26px;
-  left: 50%;
-  min-width: 30px;
-  padding: 2px 7px;
-  transform: translateX(-50%);
-  border: 2px solid #FF513D;
+  min-width: 26px;
+  padding: 2px 6px;
+  background: var(--error);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.82);
-  color: #FF513D;
-  font-size: 15px;
-  font-weight: 900;
-  line-height: 1.25;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
   text-align: center;
-  box-shadow: 0 0 10px rgba(255, 81, 61, 0.55);
+  font-family: 'Chakra Petch', sans-serif;
+  align-self: center;
 }
 
 .nickname {
@@ -346,7 +339,7 @@ function handleTip() {
 
 .chips {
   font-size: 13px;
-  color: #ffd700;
+  color: var(--secondary);
   font-weight: bold;
 }
 
@@ -359,13 +352,13 @@ function handleTip() {
 }
 
 .seat-status.status-seated {
-  color: #ffd54f;
-  background: rgba(255, 213, 79, 0.16);
+  color: #FCD34D;
+  background: rgba(252,211,77,0.15);
 }
 
 .seat-status.status-ready {
-  color: #8ee59a;
-  background: rgba(76, 175, 80, 0.18);
+  color: #86EFAC;
+  background: rgba(34,197,94,0.15);
 }
 
 /* Cards */
@@ -376,28 +369,28 @@ function handleTip() {
 }
 
 .card {
-  width: 30px;
-  height: 42px;
+  width: 28px;
+  height: 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   background: #fff;
-  border: 1px solid #bbb;
-  border-radius: 4px;
+  border-radius: 5px;
   font-weight: bold;
   line-height: 1;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
-.card-rank { font-size: 13px; }
-.card-suit { font-size: 11px; }
+.card-rank { font-size: 12px; }
+.card-suit { font-size: 10px; }
 
 .card.suit-red { color: #d32f2f; }
 .card.suit-black { color: #212121; }
 
 .card-back {
-  background: linear-gradient(135deg, #1565c0, #0d47a1);
-  border-color: #0d47a1;
+  background: linear-gradient(135deg, var(--primary), rgba(100,116,139,0.4));
+  border: 1px solid var(--primary);
 }
 
 /* 摊牌亮牌样式 */
@@ -415,18 +408,18 @@ function handleTip() {
   font-weight: bold;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #ccc;
+  background: rgba(13,21,37,0.8);
+  border: 1px solid var(--outline);
+  color: var(--on-surface-variant);
   white-space: nowrap;
   margin-top: 2px;
 }
 
 .showdown-hand-badge.winner-badge {
-  color: #ffd700;
-  border-color: rgba(255, 215, 0, 0.5);
-  background: rgba(255, 215, 0, 0.12);
-  text-shadow: 0 0 6px rgba(255, 215, 0, 0.3);
+  color: var(--secondary);
+  border-color: rgba(202,138,4,0.5);
+  background: rgba(202,138,4,0.12);
+  text-shadow: 0 0 6px rgba(202,138,4,0.3);
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
@@ -441,7 +434,7 @@ function handleTip() {
   .player-seat.is-me,
   .player-seat.is-current,
   .player-seat.is-showdown-winner {
-    border-width: 1px;
+    border-width: 2px;
   }
 
   .action-ring {
@@ -474,11 +467,9 @@ function handleTip() {
   }
 
   .action-countdown {
-    top: -21px;
-    min-width: 24px;
+    min-width: 22px;
     padding: 1px 5px;
-    border-width: 1px;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .chips {

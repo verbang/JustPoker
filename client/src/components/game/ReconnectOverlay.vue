@@ -68,12 +68,13 @@ onUnmounted(() => {
 }
 
 .reconnect-card {
-  background: #1e293b;
-  border-radius: 16px;
+  background: var(--surface-container-high);
+  border-radius: var(--radius-card);
   padding: 40px 48px;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
   min-width: 280px;
+  border: 1px solid var(--outline);
 }
 
 .icon {
@@ -83,22 +84,22 @@ onUnmounted(() => {
 
 h3 {
   margin: 0 0 8px;
-  font-size: 20px;
-  color: #f1f5f9;
+  font-size: 18px;
+  color: var(--on-surface);
 }
 
 p {
   margin: 0 0 20px;
   font-size: 14px;
-  color: #94a3b8;
+  color: var(--on-surface-variant);
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   margin: 0 auto 16px;
-  border: 4px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #60a5fa;
+  border: 3px solid var(--outline);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -110,15 +111,17 @@ p {
 .home-btn {
   padding: 10px 24px;
   border: none;
-  border-radius: 8px;
-  background: #3b82f6;
+  border-radius: var(--radius-button);
+  background: var(--primary);
   color: #fff;
-  font-size: 16px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 200ms;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
 }
 
 .home-btn:hover {
-  background: #2563eb;
+  filter: brightness(1.15);
 }
 </style>

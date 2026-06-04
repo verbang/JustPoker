@@ -1,6 +1,7 @@
 <template>
   <div class="scoreboard">
     <button class="scoreboard-toggle" type="button" @click="showScoreboard = !showScoreboard">
+      <span class="toggle-icon">{{ showScoreboard ? '-' : '+' }}</span>
       比分板
     </button>
 
@@ -16,14 +17,15 @@
         <tbody>
           <tr v-for="player in displayPlayers" :key="player.userId" :class="{ 'left-player': player.displayStatus === 'left' }">
             <td>{{ player.nickname }}</td>
-            <td>{{ player.chips }}</td>
-            <td>{{ getStatusText(player.displayStatus) }}</td>
+            <td style="font-family:'Chakra Petch',sans-serif;">{{ player.chips }}</td>
+            <td :class="getStatusClass(player.displayStatus)">{{ getStatusText(player.displayStatus) }}</td>
           </tr>
         </tbody>
       </table>
     </template>
 
     <button class="hand-reference-toggle" type="button" @click="showHandReference = !showHandReference">
+      <span class="toggle-icon">{{ showHandReference ? '-' : '+' }}</span>
       牌型参考
     </button>
 
@@ -226,36 +228,55 @@ function getStatusText(status: DisplayStatus): string {
   };
   return statusMap[status] || status;
 }
+
+function getStatusClass(status: DisplayStatus): string {
+  const classMap: Record<DisplayStatus, string> = {
+    playing: 'status-playing',
+    folded: 'status-folded',
+    all_in: 'status-allin',
+    out: 'status-out',
+    left: 'status-left',
+    seated: 'status-seated',
+    ready: 'status-ready',
+    joined: '',
+    finished: '',
+    waiting: '',
+  };
+  return classMap[status] || '';
+}
 </script>
 
 <style scoped>
 .scoreboard {
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 8px;
-  padding: 16px;
-  color: #fff;
+  background: var(--surface-container);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  flex: 1;
   min-height: 0;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .scoreboard-toggle {
   width: 100%;
-  min-height: 34px;
-  border: 1px solid rgba(255, 215, 0, 0.45);
-  border-radius: 6px;
-  background: rgba(255, 215, 0, 0.12);
-  color: #ffd700;
-  font-size: 14px;
-  font-weight: bold;
+  padding: 10px 16px;
+  border: none;
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 200ms;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  text-align: left;
 }
 
 .scoreboard-toggle:hover {
-  background: rgba(255, 215, 0, 0.2);
+  background: var(--outline);
 }
 
 .scoreboard table {
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 table {
@@ -265,17 +286,56 @@ table {
 
 th, td {
   padding: 8px 12px;
-  text-align: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+  border-bottom: 1px solid rgba(63,63,70,0.5);
 }
 
 th {
-  font-size: 12px;
-  color: #aaa;
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  font-weight: 500;
+  border-bottom: 1px solid var(--outline);
+  position: sticky;
+  top: 0;
+  background: var(--surface-container);
 }
 
 td {
-  font-size: 14px;
+  font-size: 13px;
+}
+
+tbody tr:nth-child(even) td {
+  background: rgba(255,255,255,0.02);
+}
+
+.status-playing {
+  color: var(--primary);
+}
+
+.status-folded {
+  color: var(--on-surface-variant);
+}
+
+.status-allin {
+  color: var(--secondary);
+}
+
+.status-out {
+  color: var(--error);
+  opacity: 0.6;
+}
+
+.status-left {
+  color: var(--on-surface-variant);
+  opacity: 0.4;
+}
+
+.status-seated {
+  color: #FCD34D;
+}
+
+.status-ready {
+  color: var(--tertiary);
 }
 
 .left-player {
@@ -288,25 +348,26 @@ td {
 
 .hand-reference-toggle {
   width: 100%;
-  margin-top: 12px;
-  min-height: 34px;
-  border: 1px solid rgba(255, 215, 0, 0.45);
-  border-radius: 6px;
-  background: rgba(255, 215, 0, 0.12);
-  color: #ffd700;
-  font-size: 14px;
-  font-weight: bold;
+  padding: 10px 16px;
+  border: none;
+  border-top: 1px solid var(--outline);
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 200ms;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  text-align: left;
 }
 
 .hand-reference-toggle:hover {
-  background: rgba(255, 215, 0, 0.2);
+  background: var(--outline);
 }
 
 .hand-reference {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 12px 16px;
+  overflow: auto;
 }
 
 .hand-reference ol {
@@ -321,9 +382,9 @@ td {
 
 .hand-name {
   display: block;
-  color: #fff;
+  color: var(--on-surface);
   font-size: 13px;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .hand-cards {
@@ -339,7 +400,7 @@ td {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1px solid #ddd;
+  border: 1px solid #475569;
   border-radius: 4px;
   background: #fff;
   color: #222;
@@ -359,30 +420,24 @@ td {
 .hand-desc {
   display: block;
   margin-top: 2px;
-  color: #bbb;
+  color: var(--on-surface-variant);
   font-size: 12px;
   line-height: 1.35;
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
   .scoreboard {
-    flex: 1;
-    padding: 8px;
     border-radius: 6px;
   }
 
   .scoreboard-toggle {
-    min-height: 28px;
+    padding: 8px 12px;
     font-size: 11px;
-  }
-
-  .scoreboard table {
-    margin-top: 8px;
   }
 
   th,
   td {
-    padding: 5px 4px;
+    padding: 5px 8px;
   }
 
   th {
@@ -394,14 +449,12 @@ td {
   }
 
   .hand-reference-toggle {
-    margin-top: 8px;
-    min-height: 28px;
+    padding: 8px 12px;
     font-size: 11px;
   }
 
   .hand-reference {
-    margin-top: 7px;
-    padding-top: 7px;
+    padding: 8px 12px;
   }
 
   .hand-reference ol {
@@ -430,6 +483,13 @@ td {
 
   .hand-desc {
     font-size: 10px;
+  }
+}
+
+@media (orientation: portrait) {
+  .scoreboard {
+    flex: 1;
+    min-width: 200px;
   }
 }
 </style>

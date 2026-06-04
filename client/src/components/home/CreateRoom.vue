@@ -1,36 +1,50 @@
 <template>
-  <div class="create-room">
-    <h2>创建房间</h2>
+  <div class="form-card">
+    <div class="form-card-header">
+      <div class="form-card-title">创建房间</div>
+      <button class="form-card-close" @click="$emit('back')">&times;</button>
+    </div>
+
     <NicknameInput
-      label="设置昵称"
-      placeholder="1-5个字符"
+      label="昵称"
+      placeholder="1-5 个字符"
       :existing-nicknames="[]"
       @update:nickname="nickname = $event"
       @valid="isNicknameValid = $event"
     />
+
     <ChipSelector
-      label="设置初始筹码"
+      label="初始筹码"
       :options="[100, 200, 500]"
       v-model="initialChips"
     />
-    <div class="password-field">
-      <label>房间密码（可选）</label>
+
+    <div class="field">
+      <label class="field-label">房间密码（可选）</label>
       <input
+        class="field-input"
         v-model="password"
         type="text"
-        placeholder="4位数字，留空则无密码"
+        placeholder="4 位数字，留空则无密码"
         maxlength="4"
         inputmode="numeric"
         @input="handlePasswordInput"
       />
       <span v-if="passwordError" class="field-error">{{ passwordError }}</span>
     </div>
-    <label class="toggle-field">
-      <input v-model="actionTimeoutEnabled" type="checkbox" />
-      <span>行动倒计时</span>
-    </label>
-    <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
-    <button :disabled="!isNicknameValid" @click="createRoom">创建房间</button>
+
+    <div class="toggle-row">
+      <span class="toggle-label">行动倒计时</span>
+      <input v-model="actionTimeoutEnabled" type="checkbox" class="toggle" />
+    </div>
+
+    <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
+
+    <button
+      class="btn-primary"
+      :disabled="!isNicknameValid"
+      @click="createRoom"
+    >创建房间</button>
   </div>
 </template>
 
@@ -43,6 +57,8 @@ import { useUserStore } from '../../stores/user';
 import { useRoomStore } from '../../stores/room';
 import NicknameInput from '../common/NicknameInput.vue';
 import ChipSelector from '../common/ChipSelector.vue';
+
+defineEmits<{ (e: 'back'): void }>();
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -66,7 +82,7 @@ function validatePassword() {
   if (!password.value) return;
 
   if (!/^\d{0,4}$/.test(password.value) || password.value.length !== 4) {
-    passwordError.value = '密码仅支持4位纯数字';
+    passwordError.value = '密码仅支持 4 位纯数字';
   }
 }
 
@@ -100,60 +116,164 @@ async function createRoom() {
 </script>
 
 <style scoped>
-.password-field {
+.form-card {
+  background: var(--surface-container);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  border: 1px solid var(--outline);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.form-card-title {
+  font-family: 'Russo One', sans-serif;
+  font-size: 18px;
+  color: var(--on-surface);
+}
+
+.form-card-close {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background-color 200ms;
+  line-height: 1;
+}
+
+.form-card-close:hover {
+  background: var(--surface-container-high);
+}
+
+.field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.password-field label {
-  font-size: 14px;
-  color: #ccc;
+.field-label {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  font-weight: 500;
 }
 
-.password-field input {
-  padding: 10px 12px;
-  border: 1px solid #555;
-  border-radius: 6px;
-  background: #2a2a2a;
-  color: #fff;
-  font-size: 16px;
+.field-input {
+  padding: 12px 14px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-input);
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  font-size: 15px;
   outline: none;
+  transition: border-color 200ms, box-shadow 200ms;
 }
 
-.password-field input:focus {
-  border-color: #4caf50;
+.field-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
-.password-field input::placeholder {
-  color: #777;
+.field-input::placeholder {
+  color: var(--on-surface-variant);
+  opacity: 0.6;
 }
 
 .field-error {
-  color: #ff6b6b;
-  font-size: 13px;
+  font-size: 12px;
+  color: var(--error);
 }
 
-.toggle-field {
+.toggle-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #ddd;
-  font-size: 14px;
-  cursor: pointer;
-  user-select: none;
+  justify-content: space-between;
+  padding: 4px 0;
 }
 
-.toggle-field input {
+.toggle-label {
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  appearance: none;
+  background: var(--outline);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 200ms;
+  border: none;
+  flex-shrink: 0;
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
   width: 18px;
   height: 18px;
-  accent-color: #4caf50;
+  background: var(--on-surface);
+  border-radius: 50%;
+  transition: transform 200ms;
 }
 
-.error-message {
-  color: #ff6b6b;
-  font-size: 14px;
+.toggle:checked {
+  background: #22c55e;
+}
+
+.toggle:checked::after {
+  transform: translateX(20px);
+}
+
+.error-msg {
+  font-size: 13px;
+  color: var(--error);
   text-align: center;
   margin: 0;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 14px 0;
+  border: none;
+  border-radius: var(--radius-button);
+  background: var(--primary);
+  color: #fff;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 200ms, transform 100ms;
+  margin-top: 4px;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.15);
+}
+
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary:disabled:hover {
+  background: var(--primary);
 }
 </style>

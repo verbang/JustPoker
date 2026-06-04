@@ -1,14 +1,15 @@
 <template>
   <div class="nickname-input">
-    <label>{{ label }}</label>
+    <label class="field-label">{{ label }}</label>
     <input
+      class="field-input"
       v-model="nickname"
       :placeholder="placeholder"
       :maxlength="NICKNAME_MAX_LENGTH"
       @input="onInput"
     />
-    <span v-if="error" class="error">{{ error }}</span>
-    <span v-if="success" class="success">昵称可用</span>
+    <span v-if="error" class="field-error">{{ error }}</span>
+    <span v-if="success" class="field-success">昵称可用</span>
   </div>
 </template>
 
@@ -83,36 +84,41 @@ watch(() => props.existingNicknames, () => {
   gap: 6px;
 }
 
-.nickname-input label {
-  font-size: 14px;
-  color: #ccc;
+.field-label {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  font-weight: 500;
 }
 
-.nickname-input input {
-  padding: 10px 12px;
-  border: 1px solid #555;
-  border-radius: 6px;
-  background: #2a2a2a;
-  color: #fff;
-  font-size: 16px;
+.field-input {
+  padding: 12px 14px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-input);
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  font-size: 15px;
   outline: none;
+  transition: border-color 200ms, box-shadow 200ms;
 }
 
-.nickname-input input:focus {
-  border-color: #4caf50;
+.field-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
-.nickname-input input::placeholder {
-  color: #777;
+.field-input::placeholder {
+  color: var(--on-surface-variant);
+  opacity: 0.6;
 }
 
-.error {
-  color: #ff6b6b;
-  font-size: 13px;
+.field-error {
+  font-size: 12px;
+  color: var(--error);
 }
 
-.success {
-  color: #4caf50;
-  font-size: 13px;
+.field-success {
+  font-size: 12px;
+  color: var(--tertiary);
 }
 </style>

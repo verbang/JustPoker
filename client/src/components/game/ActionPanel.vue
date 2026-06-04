@@ -1,38 +1,44 @@
 <template>
   <div class="action-panel">
-    <button class="action-btn fold" @click="$emit('fold')" :disabled="!isMyTurn">
-      弃牌
-    </button>
-    <button
-      v-if="canCheck"
-      class="action-btn check"
-      @click="$emit('check')"
-      :disabled="!isMyTurn"
-    >
-      过牌
-    </button>
-    <button
-      v-else
-      class="action-btn call"
-      @click="$emit('call')"
-      :disabled="!isMyTurn"
-    >
-      跟注 {{ callAmount }}
-    </button>
-    <button class="action-btn raise" @click="emitBetOrRaise" :disabled="!isMyTurn || !canRaise">
-      {{ raiseLabel }} {{ displayedRaiseAmount }}
-    </button>
-    <input
-      type="range"
-      v-model.number="raiseAmount"
-      :min="raiseMin"
-      :max="raiseSliderMax"
-      :disabled="!canRaise"
-      class="raise-slider"
-    />
-    <button class="action-btn all-in" @click="$emit('all-in')" :disabled="!isMyTurn">
-      全下
-    </button>
+    <div class="action-buttons">
+      <button class="action-btn fold" @click="$emit('fold')" :disabled="!isMyTurn">
+        Fold
+      </button>
+      <button
+        v-if="canCheck"
+        class="action-btn check"
+        @click="$emit('check')"
+        :disabled="!isMyTurn"
+      >
+        Check
+      </button>
+      <button
+        v-else
+        class="action-btn call"
+        @click="$emit('call')"
+        :disabled="!isMyTurn"
+      >
+        Call ${{ callAmount }}
+      </button>
+      <button class="action-btn raise" @click="emitBetOrRaise" :disabled="!isMyTurn || !canRaise">
+        {{ raiseLabel }}
+      </button>
+      <button class="action-btn all-in" @click="$emit('all-in')" :disabled="!isMyTurn">
+        All-in
+      </button>
+    </div>
+    <div class="raise-row">
+      <input
+        type="range"
+        v-model.number="raiseAmount"
+        :min="raiseMin"
+        :max="raiseSliderMax"
+        :disabled="!canRaise"
+        class="raise-slider"
+        :style="{ '--fill': raiseSliderFill + '%' }"
+      />
+      <span class="raise-value">${{ displayedRaiseAmount }}</span>
+    </div>
   </div>
 </template>
 
@@ -61,10 +67,16 @@ const canCheck = computed(() => props.myBet >= props.currentBet);
 const callAmount = computed(() => props.currentBet - props.myBet);
 const raiseMin = computed(() => props.minRaiseTo ?? props.currentBet + props.minRaise);
 const canRaise = computed(() => props.maxChips >= raiseMin.value);
-const raiseLabel = computed(() => props.currentBet === 0 ? '下注' : '加注');
+const raiseLabel = computed(() => props.currentBet === 0 ? 'Bet' : 'Raise');
 const raiseAmount = ref(raiseMin.value);
 const displayedRaiseAmount = computed(() => canRaise.value ? raiseAmount.value : raiseMin.value);
 const raiseSliderMax = computed(() => canRaise.value ? props.maxChips : raiseMin.value);
+const raiseSliderFill = computed(() => {
+  if (!canRaise.value) return 0;
+  const range = raiseSliderMax.value - raiseMin.value;
+  if (range <= 0) return 0;
+  return ((raiseAmount.value - raiseMin.value) / range) * 100;
+});
 
 function emitBetOrRaise() {
   if (!canRaise.value) return;
@@ -89,100 +101,146 @@ watch(
 
 <style scoped>
 .action-panel {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  background: var(--surface-container);
+  border-radius: var(--radius-card);
   padding: 16px;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
   flex-wrap: wrap;
-  justify-content: center;
 }
 
 .action-btn {
-  padding: 10px 20px;
+  flex: 1;
+  min-width: 60px;
+  padding: 10px 12px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-button);
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
   font-size: 14px;
-  font-weight: bold;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 200ms;
 }
 
 .action-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.action-btn.fold {
-  background: #f44336;
-  color: #fff;
+.action-btn:disabled:hover {
+  filter: none;
 }
 
-.action-btn.fold:hover:not(:disabled) {
-  background: #d32f2f;
+.action-btn:hover:not(:disabled) {
+  filter: brightness(1.25);
+}
+
+.action-btn:active {
+  transform: scale(0.97);
+}
+
+.action-btn.fold {
+  background: #991B1B;
 }
 
 .action-btn.check {
-  background: #4caf50;
-  color: #fff;
-}
-
-.action-btn.check:hover:not(:disabled) {
-  background: #388e3c;
+  background: #166534;
 }
 
 .action-btn.call {
-  background: #2196f3;
-  color: #fff;
-}
-
-.action-btn.call:hover:not(:disabled) {
-  background: #1976d2;
+  background: #1E40AF;
 }
 
 .action-btn.raise {
-  background: #ff9800;
-  color: #fff;
-}
-
-.action-btn.raise:hover:not(:disabled) {
-  background: #f57c00;
+  background: #92400E;
 }
 
 .action-btn.all-in {
-  background: #9c27b0;
-  color: #fff;
-}
-
-.action-btn.all-in:hover:not(:disabled) {
-  background: #7b1fa2;
+  background: #5B21B6;
 }
 
 .raise-slider {
-  width: 120px;
+  flex: 1;
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: linear-gradient(to right, #B45309 0%, #B45309 var(--fill, 0%), var(--outline) var(--fill, 0%), var(--outline) 100%);
+  border-radius: 3px;
   cursor: pointer;
+  outline: none;
+}
+
+.raise-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  background: #B45309;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.raise-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: #B45309;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+
+.raise-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.raise-value {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #B45309;
+  min-width: 50px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
   .action-panel {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
     gap: 6px;
-    padding: 8px;
-    border-radius: 6px;
+    padding: 10px;
+    border-radius: 8px;
   }
 
   .action-btn {
-    min-height: 38px;
-    padding: 8px 6px;
+    min-height: 36px;
+    padding: 8px 8px;
     font-size: 12px;
+    min-width: 50px;
   }
 
-  .raise-slider {
-    grid-column: 1 / -1;
-    width: 100%;
-    min-height: 30px;
+  .raise-value {
+    font-size: 14px;
+    min-width: 40px;
+  }
+}
+
+@media (orientation: portrait) {
+  .action-panel {
+    flex: 1;
+    min-width: 200px;
   }
 }
 </style>

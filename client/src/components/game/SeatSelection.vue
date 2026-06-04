@@ -86,10 +86,11 @@ function selectSeat(seatNumber: number) {
 }
 
 .seat-selection h3 {
-  margin: 0 0 12px 0;
+  margin: 0 0 16px 0;
   text-align: center;
-  color: #ffd700;
-  font-size: 18px;
+  color: var(--on-surface);
+  font-family: 'Russo One', sans-serif;
+  font-size: 20px;
 }
 
 .table-container {
@@ -105,16 +106,20 @@ function selectSeat(seatNumber: number) {
   transform: translate(-50%, -50%);
   width: 50%;
   height: 45%;
-  background: #1b5e20;
+  background: linear-gradient(145deg, #0D2137, #132D4A);
   border-radius: 50%;
-  border: 6px solid #4e342e;
+  border: 6px solid #1A1A1A;
+  box-shadow:
+    inset 0 0 20px rgba(0,0,0,0.4),
+    0 0 0 3px #2C2C2C,
+    0 0 0 5px #1A1A1A;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .table-label {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.35);
   font-size: 14px;
 }
 
@@ -124,38 +129,37 @@ function selectSeat(seatNumber: number) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 70px;
-  height: 56px;
-  border-radius: 8px;
+  width: 68px;
+  height: 54px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 200ms;
   border: 2px solid transparent;
-  font-family: inherit;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
 }
 
 .seat-node.available {
-  background: rgba(76, 175, 80, 0.35);
-  border-color: #4caf50;
-  color: #fff;
+  background: rgba(34,197,94,0.15);
+  border-color: var(--tertiary);
+  color: var(--on-surface);
 }
 
 .seat-node.available:hover {
-  background: rgba(76, 175, 80, 0.6);
-  transform: translate(-50%, -50%) scale(1.1);
-  box-shadow: 0 0 12px rgba(76, 175, 80, 0.5);
+  background: rgba(34,197,94,0.3);
+  transform: translate(-50%, -50%) scale(1.08);
 }
 
 .seat-node.occupied {
-  background: rgba(100, 100, 100, 0.4);
-  border-color: #777;
+  background: rgba(239,68,68,0.12);
+  border-color: rgba(239,68,68,0.4);
   cursor: not-allowed;
-  color: #ccc;
+  color: var(--on-surface-variant);
 }
 
 .seat-node.my-seat {
-  background: rgba(33, 150, 243, 0.5);
-  border-color: #2196f3;
-  color: #fff;
+  background: var(--primary-container) !important;
+  border-color: var(--primary) !important;
+  color: var(--on-surface) !important;
 }
 
 .seat-number {
@@ -165,9 +169,9 @@ function selectSeat(seatNumber: number) {
 
 .seat-player {
   font-size: 10px;
-  color: #ffd700;
+  color: var(--secondary);
   margin-top: 2px;
-  max-width: 60px;
+  max-width: 56px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -209,7 +213,7 @@ function selectSeat(seatNumber: number) {
   .seat-node {
     width: 58px;
     height: 44px;
-    border-radius: 6px;
+    border-radius: 8px;
   }
 
   .seat-number {

@@ -28,20 +28,20 @@ const handResult = computed<HandResult | null>(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--surface-container-high);
   border-radius: 20px;
-  border: 1px solid rgba(255, 215, 0, 0.3);
+  border: 1px solid var(--outline);
 }
 
 .hand-label {
   font-size: 11px;
-  color: #aaa;
+  color: var(--on-surface-variant);
 }
 
 .hand-name {
   font-size: 14px;
   font-weight: bold;
-  color: #ffd700;
+  color: var(--secondary);
 }
 
 /* Highlight stronger hands */

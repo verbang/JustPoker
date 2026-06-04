@@ -1,8 +1,17 @@
 <template>
   <div class="room">
     <header class="room-header">
-      <h2>房间: {{ roomCode }}</h2>
-      <button class="leave-btn" @click="handleLeaveRoom">离开</button>
+      <div class="room-code">房间 <span>{{ roomCode }}</span></div>
+      <div class="header-actions">
+        <button
+          v-if="myStatus === 'seated'"
+          class="ready-btn"
+          @click="handleReady"
+        >
+          准备
+        </button>
+        <button class="leave-btn" @click="handleLeaveRoom">离开</button>
+      </div>
     </header>
 
     <!-- Seat Selection (when player hasn't selected a seat) -->
@@ -31,14 +40,12 @@
           :disconnected-player-ids="disconnectedPlayers"
           :active-emojis="activeEmojis"
           :action-remaining-seconds="actionRemainingSeconds"
-          :show-ready-button="myStatus === 'seated'"
           :hand-hole-cards="myCards"
           :hand-community-cards="communityCards"
           :showdown-mode="showdownMode"
           :showdown-players="showdownPlayers"
           :winning-hand-description="winningHandDescription"
           :winner-can-reveal="winnerCanReveal"
-          @ready="handleReady"
           @tip="handleTip"
           @reveal-cards="handleRevealCards"
         />
@@ -699,7 +706,7 @@ function handleGoHome() {
 <style scoped>
 .room {
   min-height: 100dvh;
-  background: #0d47a1;
+  background: var(--surface);
   padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
     max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   display: flex;
@@ -711,43 +718,74 @@ function handleGoHome() {
 
 .room-header {
   width: 100%;
+  max-width: 1100px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  justify-content: space-between;
+  padding: 0 4px;
 }
 
-h2 {
-  color: #fff;
-  margin: 0;
-  font-size: 18px;
-  line-height: 1.2;
-  text-align: center;
+.room-code {
+  font-family: 'Russo One', sans-serif;
+  font-size: 16px;
+  color: var(--on-surface-variant);
+  letter-spacing: 1px;
+}
+
+.room-code span {
+  color: var(--primary);
 }
 
 .leave-btn {
-  padding: 4px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  padding: 6px 16px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 200ms;
 }
 
 .leave-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ready-btn {
+  padding: 6px 16px;
+  border: 1px solid #2ecc71;
+  border-radius: 8px;
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 200ms;
+}
+
+.ready-btn:hover {
+  background: rgba(46, 204, 113, 0.25);
+  color: #3ddc84;
 }
 
 .game-layout {
   width: 100%;
+  max-width: 1100px;
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(230px, 28vw);
-  gap: 10px;
+  grid-template-columns: 1fr 280px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -764,8 +802,9 @@ h2 {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   overflow: hidden;
+  min-width: 0;
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
@@ -782,18 +821,20 @@ h2 {
     padding: 4px 8px;
     border-radius: 6px;
     background: rgba(0, 0, 0, 0.45);
+    max-width: none;
   }
 
-  h2 {
+  .room-code {
     font-size: 13px;
   }
 
   .game-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(184px, 27vw);
+    grid-template-columns: 1fr 220px;
     grid-template-rows: minmax(0, 1fr);
-    gap: 6px;
+    gap: 8px;
     height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
     overflow: hidden;
+    max-width: none;
   }
 
   .table-zone {
@@ -813,13 +854,19 @@ h2 {
   }
 
   .game-layout {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(420px, 1fr) auto;
+    max-width: none;
   }
 
   .table-zone {
     min-height: 420px;
   }
 
+  .control-zone {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 </style>

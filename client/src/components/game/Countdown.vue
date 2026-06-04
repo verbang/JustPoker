@@ -65,20 +65,20 @@ onUnmounted(() => {
 }
 
 .countdown-text {
+  font-family: 'Russo One', sans-serif;
   font-size: 120px;
-  font-weight: 900;
   color: #fff;
   text-shadow:
-    0 0 20px rgba(255, 235, 59, 0.8),
-    0 0 40px rgba(255, 235, 59, 0.4);
+    0 0 20px rgba(99,102,241,0.6),
+    0 0 40px rgba(99,102,241,0.3);
   user-select: none;
 }
 
 .countdown-text.go {
-  color: #4caf50;
+  color: var(--tertiary);
   text-shadow:
-    0 0 20px rgba(76, 175, 80, 0.8),
-    0 0 40px rgba(76, 175, 80, 0.4);
+    0 0 20px rgba(34,197,94,0.8),
+    0 0 40px rgba(34,197,94,0.4);
   font-size: 140px;
 }
 

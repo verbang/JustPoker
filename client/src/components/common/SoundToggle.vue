@@ -1,10 +1,7 @@
 <template>
-  <div class="sound-toggle">
-    <button @click="toggle" :class="{ active: enabled }">
-      {{ enabled ? '🔊' : '🔇' }}
-    </button>
-    <span>音效{{ enabled ? '开启' : '关闭' }}</span>
-  </div>
+  <button class="sound-btn" @click="toggle">
+    {{ enabled ? '🔊 音效开' : '🔇 音效关' }}
+  </button>
 </template>
 
 <script setup lang="ts">
@@ -18,3 +15,24 @@ function toggle() {
   soundManager.setEnabled(enabled.value);
 }
 </script>
+
+<style scoped>
+.sound-btn {
+  background: var(--surface-container);
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  color: var(--on-surface-variant);
+  transition: background-color 200ms;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sound-btn:hover {
+  background: var(--surface-container-high);
+}
+</style>
