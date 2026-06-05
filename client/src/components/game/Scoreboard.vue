@@ -1,11 +1,23 @@
 <template>
   <div class="scoreboard">
-    <button class="scoreboard-toggle" type="button" @click="showScoreboard = !showScoreboard">
-      <span class="toggle-icon">{{ showScoreboard ? '-' : '+' }}</span>
-      比分板
+    <button class="panel-toggle" type="button" @click="showEmojiPanel = !showEmojiPanel">
+      <span class="toggle-icon">{{ showEmojiPanel ? '-' : '+' }}</span>
+      表情
     </button>
 
-    <template v-if="showScoreboard">
+    <section v-if="showEmojiPanel" class="emoji-section">
+      <EmojiPanel
+        :is-cooldown="isEmojiCooldown"
+        @send="$emit('sendEmoji', $event)"
+      />
+    </section>
+
+    <button class="panel-toggle" type="button" @click="showScoreboard = !showScoreboard">
+      <span class="toggle-icon">{{ showScoreboard ? '-' : '+' }}</span>
+      积分
+    </button>
+
+    <section v-if="showScoreboard" class="score-section">
       <table>
         <thead>
           <tr>
@@ -22,11 +34,11 @@
           </tr>
         </tbody>
       </table>
-    </template>
+    </section>
 
-    <button class="hand-reference-toggle" type="button" @click="showHandReference = !showHandReference">
+    <button class="panel-toggle" type="button" @click="showHandReference = !showHandReference">
       <span class="toggle-icon">{{ showHandReference ? '-' : '+' }}</span>
-      牌型参考
+      牌型
     </button>
 
     <section v-if="showHandReference" class="hand-reference">
@@ -53,6 +65,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import EmojiPanel from './EmojiPanel.vue';
 import type { GamePlayer, GameState } from '../../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../../shared/types/room.types';
 
@@ -63,22 +76,27 @@ const props = defineProps<{
   players: RoomPlayer[];
   gameState?: {
     status: GameState['status'];
-    players: { userId: string; status: GamePlayer['status'] }[];
+    players: { userId: string; status: GamePlayer['status']; chips: number }[];
   } | null;
   leftPlayers?: { userId: string; nickname: string; chips: number }[];
+  isEmojiCooldown: boolean;
+}>();
+
+defineEmits<{
+  (e: 'sendEmoji', emoji: string): void;
 }>();
 
 const displayPlayers = computed<DisplayPlayer[]>(() => {
   const activePlayers = props.players.map(p => {
     // During an active hand, prefer game-level status; after finish, room status carries ready state.
     let displayStatus: DisplayStatus = p.status;
+    const gamePlayer = props.gameState?.players.find(gp => gp.userId === p.userId);
     if (props.gameState?.status === 'playing') {
-      const gamePlayer = props.gameState.players.find(gp => gp.userId === p.userId);
       if (gamePlayer) {
         displayStatus = gamePlayer.status;
       }
     }
-    return { ...p, displayStatus };
+    return { ...p, chips: gamePlayer?.chips ?? p.chips, displayStatus };
   });
 
   // 添加已离开的玩家（仅在游戏中离开的玩家）
@@ -94,11 +112,17 @@ const displayPlayers = computed<DisplayPlayer[]>(() => {
       displayStatus: 'left' as DisplayStatus,
     }));
 
-  return [...activePlayers, ...leftPlayers];
+  return [...activePlayers, ...leftPlayers].sort((a, b) => {
+    if (b.chips !== a.chips) {
+      return b.chips - a.chips;
+    }
+    return a.nickname.localeCompare(b.nickname, 'zh-Hans');
+  });
 });
 
 const showScoreboard = ref(true);
 const showHandReference = ref(false);
+const showEmojiPanel = ref(false);
 
 const handReferences = [
   {
@@ -248,21 +272,25 @@ function getStatusClass(status: DisplayStatus): string {
 
 <style scoped>
 .scoreboard {
-  background: var(--surface-container);
+  background: var(--surface-container-soft);
+  border: 1px solid var(--outline);
   border-radius: var(--radius-card);
-  overflow: hidden;
+  overflow: auto;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--shadow-panel);
 }
 
-.scoreboard-toggle {
+.panel-toggle {
   width: 100%;
-  padding: 10px 16px;
+  min-height: 34px;
+  padding: 8px 14px;
   border: none;
-  background: var(--surface-container-high);
-  color: var(--on-surface);
+  border-bottom: 1px solid var(--outline);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -271,8 +299,17 @@ function getStatusClass(status: DisplayStatus): string {
   text-align: left;
 }
 
-.scoreboard-toggle:hover {
-  background: var(--outline);
+.panel-toggle:hover {
+  background: var(--surface-container-high);
+}
+
+.emoji-section,
+.score-section {
+  border-bottom: 1px solid var(--outline);
+}
+
+.emoji-section {
+  padding: 10px;
 }
 
 .scoreboard table {
@@ -285,9 +322,9 @@ table {
 }
 
 th, td {
-  padding: 8px 12px;
-  text-align: left;
-  border-bottom: 1px solid rgba(63,63,70,0.5);
+  padding: 7px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--outline);
 }
 
 th {
@@ -297,7 +334,7 @@ th {
   border-bottom: 1px solid var(--outline);
   position: sticky;
   top: 0;
-  background: var(--surface-container);
+  background: rgba(30,30,30,0.98);
 }
 
 td {
@@ -309,11 +346,12 @@ tbody tr:nth-child(even) td {
 }
 
 .status-playing {
-  color: var(--primary);
+  color: #E4E4E7;
 }
 
 .status-folded {
   color: var(--on-surface-variant);
+  opacity: 0.45;
 }
 
 .status-allin {
@@ -346,27 +384,8 @@ tbody tr:nth-child(even) td {
   color: #999;
 }
 
-.hand-reference-toggle {
-  width: 100%;
-  padding: 10px 16px;
-  border: none;
-  border-top: 1px solid var(--outline);
-  background: var(--surface-container-high);
-  color: var(--on-surface);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 200ms;
-  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
-  text-align: left;
-}
-
-.hand-reference-toggle:hover {
-  background: var(--outline);
-}
-
 .hand-reference {
-  padding: 12px 16px;
+  padding: 10px 14px;
   overflow: auto;
 }
 
@@ -400,7 +419,7 @@ tbody tr:nth-child(even) td {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1px solid #475569;
+  border: 1px solid var(--outline);
   border-radius: 4px;
   background: #fff;
   color: #222;
@@ -428,9 +447,11 @@ tbody tr:nth-child(even) td {
 @media (orientation: landscape) and (max-width: 900px) {
   .scoreboard {
     border-radius: 6px;
+    min-height: 0;
+    overflow: auto;
   }
 
-  .scoreboard-toggle {
+  .panel-toggle {
     padding: 8px 12px;
     font-size: 11px;
   }
@@ -445,11 +466,6 @@ tbody tr:nth-child(even) td {
   }
 
   td {
-    font-size: 11px;
-  }
-
-  .hand-reference-toggle {
-    padding: 8px 12px;
     font-size: 11px;
   }
 

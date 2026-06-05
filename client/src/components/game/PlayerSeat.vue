@@ -156,22 +156,25 @@ function handleTip() {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: var(--surface-container);
-  border: 2px solid transparent;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(30,30,30,0.88);
+  border: 2px solid var(--outline);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.22);
   pointer-events: auto;
-  min-width: 86px;
+  transition: opacity 200ms, border-color 200ms, box-shadow 200ms, background-color 200ms;
+  min-width: 80px;
   max-width: 110px;
 }
 
 .player-seat.is-me {
   border-color: var(--primary);
+  background: rgba(30,30,30,0.96);
 }
 
 .player-seat.is-current {
   border-color: var(--error);
-  box-shadow: 0 0 0 3px rgba(239,68,68,0.2), 0 0 16px rgba(239,68,68,0.3);
+  box-shadow: 0 0 0 2px rgba(239,68,68,0.28), 0 0 16px rgba(239,68,68,0.58);
 }
 
 .player-seat.is-folded {
@@ -184,12 +187,12 @@ function handleTip() {
 
 .player-seat.is-showdown-winner {
   border-color: var(--secondary);
-  box-shadow: 0 0 0 3px rgba(202,138,4,0.2), 0 0 12px rgba(202,138,4,0.3);
+  box-shadow: 0 0 0 2px rgba(202,138,4,0.18), 0 0 14px rgba(202,138,4,0.38);
 }
 
 .player-seat.is-me.is-showdown-winner {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(202,138,4,0.2), 0 0 12px rgba(202,138,4,0.3);
+  border-color: var(--secondary);
+  box-shadow: 0 0 0 2px rgba(202,138,4,0.2), 0 0 14px rgba(202,138,4,0.38);
 }
 
 .action-ring {
@@ -207,7 +210,7 @@ function handleTip() {
   position: absolute;
   inset: 5px;
   border-radius: 10px;
-  background: rgba(13,21,37,0.92);
+  background: rgba(30,30,30,0.92);
 }
 
 /* Position badges */
@@ -227,15 +230,15 @@ function handleTip() {
 }
 
 .badge.dealer {
-  background: #FF9800;
+  background: #ff9800;
 }
 
 .badge.sb {
-  background: #2196F3;
+  background: #2196f3;
 }
 
 .badge.bb {
-  background: #F44336;
+  background: #f44336;
 }
 
 .badge.disconnected {
@@ -309,28 +312,33 @@ function handleTip() {
 }
 
 .action-countdown {
-  min-width: 26px;
-  padding: 2px 6px;
-  background: var(--error);
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  min-width: 30px;
+  padding: 2px 7px;
+  transform: translateX(-50%);
+  border: 2px solid var(--error);
   border-radius: 999px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
+  background: rgba(30,30,30,0.9);
+  color: var(--error);
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.25;
   text-align: center;
   font-family: 'Chakra Petch', sans-serif;
-  align-self: center;
+  box-shadow: 0 0 10px rgba(239,68,68,0.4);
 }
 
 .nickname {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: bold;
-  color: #fff;
+  color: var(--on-surface);
   cursor: pointer;
-  max-width: 100px;
+  max-width: 90px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 }
 
 .nickname:hover {
@@ -376,6 +384,7 @@ function handleTip() {
   align-items: center;
   justify-content: center;
   background: #fff;
+  border: 1px solid #CBD5E1;
   border-radius: 5px;
   font-weight: bold;
   line-height: 1;
@@ -389,8 +398,10 @@ function handleTip() {
 .card.suit-black { color: #212121; }
 
 .card-back {
-  background: linear-gradient(135deg, var(--primary), rgba(100,116,139,0.4));
-  border: 1px solid var(--primary);
+  background:
+    linear-gradient(135deg, rgba(148,163,184,0.18) 25%, transparent 25%) 0 0 / 8px 8px,
+    linear-gradient(135deg, #3F3F46, #1E1E1E);
+  border: 1px solid var(--outline);
 }
 
 /* 摊牌亮牌样式 */
@@ -408,7 +419,7 @@ function handleTip() {
   font-weight: bold;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgba(13,21,37,0.8);
+  background: rgba(30,30,30,0.82);
   border: 1px solid var(--outline);
   color: var(--on-surface-variant);
   white-space: nowrap;
@@ -467,9 +478,10 @@ function handleTip() {
   }
 
   .action-countdown {
-    min-width: 22px;
+    top: -21px;
+    min-width: 24px;
     padding: 1px 5px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .chips {

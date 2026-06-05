@@ -33,6 +33,8 @@ describe('GameEngine', () => {
     expect(state.status).toBe('playing');
     expect(state.phase).toBe('preflop');
     expect(state.pot).toBe(15); // 5 + 10
+    expect(state.minRaise).toBe(5);
+    expect(state.minRaiseTo).toBe(15);
     expect(state.players).toHaveLength(3);
   });
 
@@ -173,7 +175,21 @@ describe('GameEngine', () => {
       createPlayer({ userId: '2', seatNumber: 2 }),
     ];
     const state = engine.startGame('room1', players, 5, 10);
-    expect(() => engine.playerAction(state, '1', 'raise', 15)).toThrow('minimum raise');
+    expect(() => engine.playerAction(state, '1', 'raise', 14)).toThrow('minimum raise');
+  });
+
+  test('should reject bet and raise amounts outside 5-chip step', () => {
+    const players = [
+      createPlayer({ userId: '1', seatNumber: 1, chips: 995 }),
+      createPlayer({ userId: '2', seatNumber: 2, chips: 990 }),
+    ];
+    let state = engine.startGame('room1', players, 5, 10);
+
+    expect(() => engine.playerAction(state, '1', 'raise', 16)).toThrow('5-chip step');
+
+    state = engine.playerAction(state, '1', 'call');
+    state = engine.playerAction(state, '2', 'check');
+    expect(() => engine.playerAction(state, '2', 'bet', 11)).toThrow('5-chip step');
   });
 
   test('should not reopen action for incomplete all-in raise', () => {
@@ -186,14 +202,14 @@ describe('GameEngine', () => {
     state = engine.playerAction(state, '1', 'all_in');
 
     expect(state.currentBet).toBe(15);
-    expect(state.minRaise).toBe(10);
+    expect(state.minRaise).toBe(5);
 
     state = engine.playerAction(state, '2', 'call');
     state = engine.playerAction(state, '3', 'call');
     expect(state.phase).toBe('flop');
   });
 
-  test('should lock previous callers from raising after incomplete all-in raise', () => {
+  test('should reopen action after all-in raise reaches 5-chip step', () => {
     const players = [
       createPlayer({ userId: '1', seatNumber: 1, chips: 100 }),
       createPlayer({ userId: '2', seatNumber: 2, chips: 100 }),
@@ -209,9 +225,23 @@ describe('GameEngine', () => {
     state = engine.playerAction(state, '3', 'all_in');
 
     expect(state.currentBet).toBe(35);
-    expect(state.minRaise).toBe(20);
-    expect(state.minRaiseTo).toBe(50);
-    expect(() => engine.playerAction(state, '1', 'raise', 55)).toThrow('Cannot raise');
+    expect(state.minRaise).toBe(5);
+    expect(state.minRaiseTo).toBe(40);
+    const result = engine.playerAction(state, '1', 'raise', 55);
+    expect(result.currentBet).toBe(55);
+    expect(result.minRaiseTo).toBe(60);
+  });
+
+  test('should allow all-in amount outside 5-chip step', () => {
+    const players = [
+      createPlayer({ userId: '1', seatNumber: 1, chips: 17 }),
+      createPlayer({ userId: '2', seatNumber: 2, chips: 100 }),
+    ];
+    const state = engine.startGame('room1', players, 5, 10);
+    const result = engine.playerAction(state, '1', 'all_in');
+
+    expect(result.players[0].bet).toBe(17);
+    expect(result.players[0].status).toBe('all_in');
   });
 
   test('should allow unacted player to raise from last full raise amount after incomplete all-in', () => {
@@ -230,12 +260,12 @@ describe('GameEngine', () => {
     state = engine.playerAction(state, '1', 'all_in');
 
     expect(state.currentBet).toBe(35);
-    expect(state.minRaiseTo).toBe(50);
+    expect(state.minRaiseTo).toBe(40);
 
-    const result = engine.playerAction(state, '2', 'raise', 50);
-    expect(result.currentBet).toBe(50);
-    expect(result.minRaise).toBe(20);
-    expect(result.minRaiseTo).toBe(70);
+    const result = engine.playerAction(state, '2', 'raise', 40);
+    expect(result.currentBet).toBe(40);
+    expect(result.minRaise).toBe(5);
+    expect(result.minRaiseTo).toBe(45);
   });
 
   test('should post short blinds as all-in without negative chips', () => {

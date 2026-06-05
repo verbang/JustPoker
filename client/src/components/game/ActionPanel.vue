@@ -33,9 +33,14 @@
         v-model.number="raiseAmount"
         :min="raiseMin"
         :max="raiseSliderMax"
+        :step="BET_RAISE_STEP"
         :disabled="!canRaise"
         class="raise-slider"
         :style="{ '--fill': raiseSliderFill + '%' }"
+        @pointerdown="handleSliderPointerDown"
+        @pointermove="handleSliderPointerMove"
+        @pointerup="handleSliderPointerEnd"
+        @pointercancel="handleSliderPointerEnd"
       />
       <span class="raise-value">${{ displayedRaiseAmount }}</span>
     </div>
@@ -44,6 +49,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
+import { BET_RAISE_STEP } from '../../../../shared/constants/game.constants';
 
 const props = defineProps<{
   isMyTurn: boolean;
@@ -65,48 +71,78 @@ const emit = defineEmits<{
 
 const canCheck = computed(() => props.myBet >= props.currentBet);
 const callAmount = computed(() => props.currentBet - props.myBet);
-const raiseMin = computed(() => props.minRaiseTo ?? props.currentBet + props.minRaise);
+const raiseMin = computed(() => alignToStep(props.minRaiseTo ?? props.currentBet + props.minRaise, 'ceil'));
 const canRaise = computed(() => props.maxChips >= raiseMin.value);
 const raiseLabel = computed(() => props.currentBet === 0 ? 'Bet' : 'Raise');
 const raiseAmount = ref(raiseMin.value);
 const displayedRaiseAmount = computed(() => canRaise.value ? raiseAmount.value : raiseMin.value);
-const raiseSliderMax = computed(() => canRaise.value ? props.maxChips : raiseMin.value);
+const raiseSliderMax = computed(() => canRaise.value ? alignToStep(props.maxChips, 'floor') : raiseMin.value);
 const raiseSliderFill = computed(() => {
   if (!canRaise.value) return 0;
   const range = raiseSliderMax.value - raiseMin.value;
   if (range <= 0) return 0;
   return ((raiseAmount.value - raiseMin.value) / range) * 100;
 });
+const isDraggingSlider = ref(false);
 
 function emitBetOrRaise() {
   if (!canRaise.value) return;
+  const amount = normalizeRaiseAmount(raiseAmount.value);
 
   if (props.currentBet === 0) {
-    emit('bet', raiseAmount.value);
+    emit('bet', amount);
   } else {
-    emit('raise', raiseAmount.value);
+    emit('raise', amount);
   }
+}
+
+function alignToStep(value: number, direction: 'ceil' | 'floor'): number {
+  const quotient = value / BET_RAISE_STEP;
+  return (direction === 'ceil' ? Math.ceil(quotient) : Math.floor(quotient)) * BET_RAISE_STEP;
+}
+
+function normalizeRaiseAmount(value: number): number {
+  const steppedValue = alignToStep(value, 'floor');
+  return Math.min(Math.max(steppedValue, raiseMin.value), raiseSliderMax.value);
+}
+
+function handleSliderPointerDown(event: PointerEvent) {
+  isDraggingSlider.value = true;
+  event.currentTarget instanceof HTMLElement && event.currentTarget.setPointerCapture(event.pointerId);
+}
+
+function handleSliderPointerMove(event: PointerEvent) {
+  if (!isDraggingSlider.value) return;
+  event.preventDefault();
+}
+
+function handleSliderPointerEnd(event: PointerEvent) {
+  if (event.currentTarget instanceof HTMLElement && event.currentTarget.hasPointerCapture(event.pointerId)) {
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+  isDraggingSlider.value = false;
+  raiseAmount.value = normalizeRaiseAmount(raiseAmount.value);
 }
 
 watch(
   () => [props.currentBet, props.minRaise, props.minRaiseTo, props.maxChips],
   () => {
-    raiseAmount.value = canRaise.value ? Math.max(raiseAmount.value, raiseMin.value) : raiseMin.value;
-    if (canRaise.value && raiseAmount.value > props.maxChips) {
-      raiseAmount.value = props.maxChips;
-    }
+    raiseAmount.value = canRaise.value ? normalizeRaiseAmount(raiseAmount.value) : raiseMin.value;
   }
 );
 </script>
 
 <style scoped>
 .action-panel {
-  background: var(--surface-container);
+  background: var(--surface-container-soft);
+  border: 1px solid var(--outline);
   border-radius: var(--radius-card);
-  padding: 16px;
+  box-shadow: var(--shadow-panel);
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  flex: 0 0 auto;
   overflow: hidden;
   min-width: 0;
 }
@@ -122,13 +158,13 @@ watch(
   min-width: 60px;
   padding: 10px 12px;
   border: none;
-  border-radius: var(--radius-button);
+  border-radius: 8px;
   font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
   font-size: 14px;
   font-weight: 600;
   color: rgba(255,255,255,0.9);
   cursor: pointer;
-  transition: all 200ms;
+  transition: filter 200ms, transform 160ms, opacity 160ms;
 }
 
 .action-btn:disabled {
@@ -174,10 +210,14 @@ watch(
   -webkit-appearance: none;
   appearance: none;
   height: 6px;
-  background: linear-gradient(to right, #B45309 0%, #B45309 var(--fill, 0%), var(--outline) var(--fill, 0%), var(--outline) 100%);
+  background: linear-gradient(to right, #92400E 0%, #92400E var(--fill, 0%), var(--outline) var(--fill, 0%), var(--outline) 100%);
   border-radius: 3px;
   cursor: pointer;
   outline: none;
+  overscroll-behavior-x: contain;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .raise-slider::-webkit-slider-thumb {
@@ -203,17 +243,18 @@ watch(
 .raise-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .raise-value {
   font-family: 'Chakra Petch', sans-serif;
   font-size: 16px;
   font-weight: 600;
-  color: #B45309;
+  color: var(--secondary);
   min-width: 50px;
-  text-align: center;
+  text-align: right;
   flex-shrink: 0;
 }
 

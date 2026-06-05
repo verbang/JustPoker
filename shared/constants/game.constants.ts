@@ -10,6 +10,7 @@ export const DEFAULT_CHIPS = 100;
 // 盲注设置
 export const DEFAULT_SMALL_BLIND = 5;
 export const DEFAULT_BIG_BLIND = 10;
+export const BET_RAISE_STEP = 5;
 
 // 牌型大小顺序
 export const HAND_RANK_ORDER = {

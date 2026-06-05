@@ -46,22 +46,28 @@ function getSuitClass(suit: Suit): string {
 <style scoped>
 .community-cards {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   justify-content: center;
 }
 
 .card {
-  width: 48px;
-  height: 66px;
+  width: 52px;
+  height: 72px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  border: 2px solid var(--outline);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
   font-weight: bold;
   line-height: 1;
+  transition: transform 160ms ease;
+}
+
+.card:not(.card-empty):hover {
+  transform: scale(1.05);
 }
 
 .card-rank {
@@ -83,14 +89,15 @@ function getSuitClass(suit: Suit): string {
 }
 
 .card-empty {
-  background: rgba(255,255,255,0.06);
-  border: 2px dashed rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  border: 2px dashed var(--primary-border);
   box-shadow: none;
 }
 
 .card-placeholder {
-  color: rgba(255,255,255,0.2);
-  font-size: 18px;
+  color: var(--on-surface-variant);
+  font-size: 20px;
+  opacity: 0.3;
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
@@ -101,6 +108,7 @@ function getSuitClass(suit: Suit): string {
   .card {
     width: 34px;
     height: 48px;
+    border-width: 1px;
     border-radius: 5px;
   }
 

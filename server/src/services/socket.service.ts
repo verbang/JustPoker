@@ -33,9 +33,14 @@ class SocketService {
   private completedReveals: Map<string, { userId: string; cards: Card[] }> = new Map();
 
   initialize(httpServer: HttpServer): void {
+    const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173')
+      .split(',')
+      .map(origin => origin.trim())
+      .filter(Boolean);
+
     this.io = new Server(httpServer, {
       cors: {
-        origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+        origin: corsOrigins,
         methods: ['GET', 'POST']
       }
     });

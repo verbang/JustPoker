@@ -29,9 +29,6 @@ const emojis = EMOJIS;
 
 <style scoped>
 .emoji-panel {
-  background: var(--surface-container);
-  border-radius: var(--radius-card);
-  padding: 12px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -41,7 +38,7 @@ const emojis = EMOJIS;
 .emoji-btn {
   width: 36px;
   height: 36px;
-  border: none;
+  border: 1px solid var(--outline-soft);
   background: var(--surface-container-high);
   border-radius: 8px;
   font-size: 18px;
@@ -64,15 +61,13 @@ const emojis = EMOJIS;
 
 .cooldown {
   font-size: 11px;
-  color: var(--secondary);
+  color: var(--error);
   margin-left: 4px;
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
   .emoji-panel {
     gap: 4px;
-    padding: 6px;
-    border-radius: 6px;
   }
 
   .emoji-btn {
@@ -90,10 +85,4 @@ const emojis = EMOJIS;
   }
 }
 
-@media (orientation: portrait) {
-  .emoji-panel {
-    flex: 1;
-    min-width: 200px;
-  }
-}
 </style>

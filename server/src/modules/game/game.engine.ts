@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { GameState, GamePlayer, PlayerAction, Card } from '../../../../shared/types/game.types';
+import { BET_RAISE_STEP } from '../../../../shared/constants/game.constants';
 import { Deck } from './deck';
 import { HandEvaluator } from './hand-evaluator';
 import { Pot, PotCalculator } from './pot-calculator';
@@ -88,8 +89,8 @@ export class GameEngine {
       smallBlindIndex,
       bigBlindIndex,
       currentBet: Math.max(actualSmallBlind, actualBigBlind),
-      minRaise: bigBlind,
-      minRaiseTo: Math.max(actualSmallBlind, actualBigBlind) + bigBlind,
+      minRaise: BET_RAISE_STEP,
+      minRaiseTo: Math.max(actualSmallBlind, actualBigBlind) + BET_RAISE_STEP,
       players: gamePlayers,
       sidePots: [],
       status: 'playing',
@@ -194,9 +195,10 @@ export class GameEngine {
         if (state.currentBet > 0) {
           throw new Error('Cannot bet, must call or raise');
         }
-        if (!amount || amount < state.minRaise) {
+        if (!amount || amount < this.bigBlind) {
           throw new Error('Bet amount must be at least minimum bet');
         }
+        this.validateBetRaiseAmount(amount);
         if (this.raiseLockedPlayers.has(userId)) {
           throw new Error('Cannot bet after incomplete all-in');
         }
@@ -211,8 +213,8 @@ export class GameEngine {
           player.status = 'all_in';
         }
         newState.currentBet = amount;
-        newState.minRaise = amount;
-        newState.minRaiseTo = amount + amount;
+        newState.minRaise = BET_RAISE_STEP;
+        newState.minRaiseTo = amount + BET_RAISE_STEP;
         newState.pot += betAmount;
         this.actedPlayers = new Set();
         this.raiseLockedPlayers = new Set();
@@ -223,6 +225,7 @@ export class GameEngine {
         if (!amount || amount < state.minRaiseTo) {
           throw new Error('Raise amount must be at least current bet plus minimum raise');
         }
+        this.validateBetRaiseAmount(amount);
         if (this.raiseLockedPlayers.has(userId)) {
           throw new Error('Cannot raise after incomplete all-in');
         }
@@ -230,7 +233,6 @@ export class GameEngine {
         if (raiseAmount > player.chips) {
           throw new Error('Not enough chips to raise');
         }
-        const fullRaiseAmount = amount - this.getLastFullRaiseBet(state);
         player.chips -= raiseAmount;
         player.bet = amount;
         player.totalBet += raiseAmount;
@@ -238,8 +240,8 @@ export class GameEngine {
           player.status = 'all_in';
         }
         newState.currentBet = amount;
-        newState.minRaise = fullRaiseAmount;
-        newState.minRaiseTo = amount + newState.minRaise;
+        newState.minRaise = BET_RAISE_STEP;
+        newState.minRaiseTo = amount + BET_RAISE_STEP;
         newState.pot += raiseAmount;
         // Reset acted tracking - everyone needs to act again after a raise
         this.actedPlayers = new Set();
@@ -259,15 +261,14 @@ export class GameEngine {
         player.status = 'all_in';
         newState.pot += allInAmount;
 
-        const fullRaiseAmount = player.bet - this.getLastFullRaiseBet(state);
         const allInRaise = player.bet - state.currentBet;
         // 只有完整加注才会重新开放行动权
         if (player.bet > state.currentBet) {
           newState.currentBet = player.bet;
         }
         if (player.bet >= state.minRaiseTo) {
-          newState.minRaise = fullRaiseAmount;
-          newState.minRaiseTo = player.bet + fullRaiseAmount;
+          newState.minRaise = BET_RAISE_STEP;
+          newState.minRaiseTo = player.bet + BET_RAISE_STEP;
           // 重置 acted tracking - 加注后其他玩家需要重新行动
           this.actedPlayers = new Set();
           this.raiseLockedPlayers = new Set();
@@ -299,6 +300,12 @@ export class GameEngine {
 
   private getLastFullRaiseBet(state: GameState): number {
     return state.minRaiseTo - state.minRaise;
+  }
+
+  private validateBetRaiseAmount(amount: number): void {
+    if (!Number.isInteger(amount) || amount % BET_RAISE_STEP !== 0) {
+      throw new Error(`Bet and raise amounts must use a ${BET_RAISE_STEP}-chip step`);
+    }
   }
 
   private lockPreviouslyActedPlayersForRaise(state: GameState, allInUserId: string): void {

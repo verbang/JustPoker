@@ -28,9 +28,10 @@ const handResult = computed<HandResult | null>(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
-  background: var(--surface-container-high);
+  background: rgba(30,30,30,0.9);
   border-radius: 20px;
   border: 1px solid var(--outline);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.26);
 }
 
 .hand-label {

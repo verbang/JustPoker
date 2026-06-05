@@ -32,7 +32,7 @@ function Show-Status {
     if (Test-Path $serverEnv) {
         $corsLine = Get-Content $serverEnv | Where-Object { $_ -match "CORS_ORIGIN" }
         if ($corsLine -match "localhost") {
-            Write-Host "  Server:  LOCAL  (CORS_ORIGIN=localhost:5173)" -ForegroundColor Yellow
+            Write-Host "  Server:  LOCAL  (CORS_ORIGIN=localhost:5173,127.0.0.1:5173)" -ForegroundColor Yellow
         } else {
             Write-Host "  Server:  PROD   (CORS_ORIGIN=just-poker.vercel.app)" -ForegroundColor Green
         }
@@ -67,7 +67,7 @@ function Switch-ToLocal {
         "# Server",
         "PORT=3000",
         "NODE_ENV=development",
-        "CORS_ORIGIN=http://localhost:5173"
+        "CORS_ORIGIN=http://localhost:5173,http://127.0.0.1:5173"
     )
     Set-Content -Path $serverEnv -Value ($lines -join "`n") -Encoding UTF8
     Write-Host "  [OK] server/.env" -ForegroundColor Green

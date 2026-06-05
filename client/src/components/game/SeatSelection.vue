@@ -83,6 +83,8 @@ function selectSeat(seatNumber: number) {
   color: #fff;
   width: 100%;
   max-width: 700px;
+  flex: 1;
+  min-height: 0;
 }
 
 .seat-selection h3 {
@@ -96,7 +98,8 @@ function selectSeat(seatNumber: number) {
 .table-container {
   position: relative;
   width: 100%;
-  height: 420px;
+  height: min(520px, calc(100dvh - 96px));
+  min-height: 380px;
 }
 
 .table-surface {
@@ -108,11 +111,11 @@ function selectSeat(seatNumber: number) {
   height: 45%;
   background: linear-gradient(145deg, #0D2137, #132D4A);
   border-radius: 50%;
-  border: 6px solid #1A1A1A;
+  border: 8px solid #1A1A1A;
   box-shadow:
-    inset 0 0 20px rgba(0,0,0,0.4),
-    0 0 0 3px #2C2C2C,
-    0 0 0 5px #1A1A1A;
+    inset 0 0 34px rgba(0,0,0,0.42),
+    0 0 0 2px #2C2C2C,
+    var(--shadow-table);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -136,16 +139,17 @@ function selectSeat(seatNumber: number) {
   transition: all 200ms;
   border: 2px solid transparent;
   font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.2);
 }
 
 .seat-node.available {
-  background: rgba(34,197,94,0.15);
-  border-color: var(--tertiary);
+  background: rgba(34,197,94,0.14);
+  border-color: rgba(34,197,94,0.58);
   color: var(--on-surface);
 }
 
 .seat-node.available:hover {
-  background: rgba(34,197,94,0.3);
+  background: rgba(34,197,94,0.26);
   transform: translate(-50%, -50%) scale(1.08);
 }
 
@@ -224,6 +228,16 @@ function selectSeat(seatNumber: number) {
   .seat-empty {
     max-width: 48px;
     font-size: 9px;
+  }
+}
+
+@media (orientation: portrait) {
+  .seat-selection {
+    max-width: none;
+  }
+
+  .table-container {
+    height: 430px;
   }
 }
 </style>

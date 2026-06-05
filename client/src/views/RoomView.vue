@@ -44,7 +44,6 @@
           :hand-community-cards="communityCards"
           :showdown-mode="showdownMode"
           :showdown-players="showdownPlayers"
-          :winning-hand-description="winningHandDescription"
           :winner-can-reveal="winnerCanReveal"
           @tip="handleTip"
           @reveal-cards="handleRevealCards"
@@ -67,11 +66,13 @@
           @raise="handleRaise"
           @all-in="handleAllIn"
         />
-        <EmojiPanel
-          :is-cooldown="isCooldown"
-          @send="handleEmoji"
+        <Scoreboard
+          :players="players"
+          :game-state="gameStore.gameState"
+          :left-players="leftPlayers"
+          :is-emoji-cooldown="isCooldown"
+          @send-emoji="handleEmoji"
         />
-        <Scoreboard :players="players" :game-state="gameStore.gameState" :left-players="leftPlayers" />
       </aside>
     </div>
 
@@ -107,7 +108,6 @@ import type { RoomPlayer } from '../../../shared/types/room.types';
 import GameTable from '../components/game/GameTable.vue';
 import type { TablePlayer } from '../components/game/GameTable.vue';
 import ActionPanel from '../components/game/ActionPanel.vue';
-import EmojiPanel from '../components/game/EmojiPanel.vue';
 import Scoreboard from '../components/game/Scoreboard.vue';
 import SeatSelection from '../components/game/SeatSelection.vue';
 import Countdown from '../components/game/Countdown.vue';
@@ -201,7 +201,6 @@ const showdownPlayers = computed(() => {
   return new Map<string, ShowdownPlayerData>();
 });
 
-const winningHandDescription = computed(() => lastGameState.value?.winningHand ?? '');
 const showdownMode = computed(() => showdownPlayers.value.size > 0);
 
 // 是否为弃牌获胜（只有赢家一人，其他玩家全部弃牌）
@@ -706,7 +705,12 @@ function handleGoHome() {
 <style scoped>
 .room {
   min-height: 100dvh;
-  background: var(--surface);
+  background:
+    radial-gradient(ellipse at 50% 44%, rgba(63,63,70,0.24), transparent 34rem),
+    linear-gradient(rgba(255,255,255,0.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px),
+    var(--surface);
+  background-size: auto, 24px 24px, 24px 24px, auto;
   padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
     max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   display: flex;
@@ -714,6 +718,7 @@ function handleGoHome() {
   align-items: center;
   gap: 10px;
   overflow: hidden;
+  overscroll-behavior-x: none;
 }
 
 .room-header {
@@ -723,7 +728,7 @@ function handleGoHome() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
+  padding: 0 4px 2px;
 }
 
 .room-code {
@@ -762,10 +767,10 @@ function handleGoHome() {
 
 .ready-btn {
   padding: 6px 16px;
-  border: 1px solid #2ecc71;
+  border: 1px solid rgba(34,197,94,0.5);
   border-radius: 8px;
-  background: rgba(46, 204, 113, 0.15);
-  color: #2ecc71;
+  background: rgba(34,197,94,0.15);
+  color: #86EFAC;
   font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
   font-size: 13px;
   font-weight: 600;
@@ -774,8 +779,8 @@ function handleGoHome() {
 }
 
 .ready-btn:hover {
-  background: rgba(46, 204, 113, 0.25);
-  color: #3ddc84;
+  background: rgba(34,197,94,0.24);
+  color: #BBF7D0;
 }
 
 .game-layout {
@@ -787,6 +792,8 @@ function handleGoHome() {
   grid-template-columns: 1fr 280px;
   gap: 12px;
   align-items: stretch;
+  overflow: hidden;
+  overscroll-behavior-x: none;
 }
 
 .table-zone {
@@ -805,11 +812,17 @@ function handleGoHome() {
   gap: 10px;
   overflow: hidden;
   min-width: 0;
+  overscroll-behavior-x: none;
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
   .room {
+    height: 100dvh;
     gap: 6px;
+    padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    align-items: stretch;
+    overflow: hidden;
   }
 
   .room-header {
@@ -818,10 +831,13 @@ function handleGoHome() {
     left: max(8px, env(safe-area-inset-left));
     z-index: 5;
     width: auto;
-    padding: 4px 8px;
-    border-radius: 6px;
-    background: rgba(0, 0, 0, 0.45);
+    padding: 5px 8px;
+    border: 1px solid var(--outline-soft);
+    border-radius: 8px;
+    background: rgba(18,18,18,0.78);
+    backdrop-filter: blur(10px);
     max-width: none;
+    gap: 10px;
   }
 
   .room-code {
@@ -829,21 +845,31 @@ function handleGoHome() {
   }
 
   .game-layout {
-    grid-template-columns: 1fr 220px;
+    flex: 1 1 auto;
+    grid-template-columns: minmax(0, 1fr) 220px;
     grid-template-rows: minmax(0, 1fr);
     gap: 8px;
-    height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    height: auto;
+    min-height: 0;
+    max-height: 100%;
     overflow: hidden;
     max-width: none;
+    align-items: stretch;
   }
 
   .table-zone {
+    width: 100%;
+    height: 100%;
     align-items: flex-start;
+    overflow: hidden;
   }
 
   .control-zone {
+    height: 100%;
+    max-height: 100%;
     gap: 6px;
-    overflow-y: auto;
+    overflow: hidden;
+    padding-right: 2px;
   }
 
 }
@@ -856,17 +882,19 @@ function handleGoHome() {
   .game-layout {
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(420px, 1fr) auto;
+    grid-template-rows: minmax(430px, 1fr) auto;
     max-width: none;
+    overflow: visible;
   }
 
   .table-zone {
-    min-height: 420px;
+    min-height: 430px;
   }
 
   .control-zone {
     flex-direction: row;
     flex-wrap: wrap;
+    overflow: visible;
   }
 }
 </style>
