@@ -13,10 +13,41 @@
       @valid="isNicknameValid = $event"
     />
 
+    <div class="field">
+      <label class="field-label">游戏类型</label>
+      <div class="game-type-group">
+        <button
+          type="button"
+          class="game-type-option"
+          :class="{ active: gameType === 'texas-holdem' }"
+          @click="gameType = 'texas-holdem'"
+        >
+          <span class="game-type-title">德扑</span>
+          <span class="game-type-meta">2-10 人</span>
+        </button>
+        <button
+          type="button"
+          class="game-type-option"
+          :class="{ active: gameType === 'catch-mid' }"
+          @click="gameType = 'catch-mid'"
+        >
+          <span class="game-type-title">抓兔</span>
+          <span class="game-type-meta">3-4 人</span>
+        </button>
+      </div>
+    </div>
+
     <ChipSelector
+      v-if="gameType === 'texas-holdem'"
       label="初始筹码"
-      :options="[100, 200, 500]"
-      v-model="initialChips"
+      :options="texasChipOptions"
+      v-model="texasInitialChips"
+    />
+    <ChipSelector
+      v-else
+      label="初始筹码"
+      :options="catchMidChipOptions"
+      v-model="catchMidInitialChips"
     />
 
     <div class="field">
@@ -49,12 +80,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { roomApi } from '../../services/api';
 import { useUserStore } from '../../stores/user';
 import { useRoomStore } from '../../stores/room';
+import type { GameType } from '../../../../shared/types/room.types';
+import { CATCH_MID_CHIP_OPTIONS, CHIP_OPTIONS } from '../../../../shared/constants/game.constants';
 import NicknameInput from '../common/NicknameInput.vue';
 import ChipSelector from '../common/ChipSelector.vue';
 
@@ -65,12 +98,18 @@ const userStore = useUserStore();
 const roomStore = useRoomStore();
 
 const nickname = ref('');
-const initialChips = ref(100);
+const texasInitialChips = ref(100);
+const catchMidInitialChips = ref(50);
+const gameType = ref<GameType>('texas-holdem');
 const password = ref('');
 const actionTimeoutEnabled = ref(false);
 const isNicknameValid = ref(false);
 const passwordError = ref('');
 const errorMessage = ref('');
+
+const texasChipOptions = [...CHIP_OPTIONS];
+const catchMidChipOptions = [...CATCH_MID_CHIP_OPTIONS];
+const initialChips = computed(() => gameType.value === 'catch-mid' ? catchMidInitialChips.value : texasInitialChips.value);
 
 function handlePasswordInput() {
   password.value = password.value.replace(/\D/g, '').slice(0, 4);
@@ -96,12 +135,13 @@ async function createRoom() {
       nickname.value,
       initialChips.value,
       password.value || undefined,
-      actionTimeoutEnabled.value
+      actionTimeoutEnabled.value,
+      gameType.value
     );
     const { roomCode, roomId, userId } = response.data;
 
     userStore.setUser(userId, nickname.value, roomCode);
-    roomStore.setRoom(roomCode, roomId, initialChips.value, actionTimeoutEnabled.value);
+    roomStore.setRoom(roomCode, roomId, initialChips.value, actionTimeoutEnabled.value, response.data.gameType, userId);
 
     router.push(`/room/${roomCode}`);
   } catch (error) {
@@ -191,6 +231,42 @@ async function createRoom() {
 .field-error {
   font-size: 12px;
   color: var(--error);
+}
+
+.game-type-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.game-type-option {
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--on-surface);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  cursor: pointer;
+  font-family: 'Chakra Petch', 'Noto Sans SC', sans-serif;
+  text-align: left;
+}
+
+.game-type-option.active {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.16);
+}
+
+.game-type-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.game-type-meta {
+  font-size: 12px;
+  color: var(--on-surface-variant);
 }
 
 .toggle-row {

@@ -25,12 +25,6 @@
       @valid="isNicknameValid = $event"
     />
 
-    <ChipSelector
-      label="带入筹码"
-      :options="[100, 200, 500]"
-      v-model="chips"
-    />
-
     <div class="field">
       <label class="field-label">房间密码</label>
       <input
@@ -58,29 +52,31 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
-import { roomApi } from '../../services/api';
+import { roomApi, type RoomInfo } from '../../services/api';
 import { useUserStore } from '../../stores/user';
+import { useRoomStore } from '../../stores/room';
 import NicknameInput from '../common/NicknameInput.vue';
-import ChipSelector from '../common/ChipSelector.vue';
 
 defineEmits<{ (e: 'back'): void }>();
 
 const router = useRouter();
 const userStore = useUserStore();
+const roomStore = useRoomStore();
 
 const roomCode = ref('');
 const nickname = ref('');
-const chips = ref(100);
 const password = ref('');
 const isNicknameValid = ref(false);
 const errorMessage = ref('');
 const existingNicknames = ref<string[]>([]);
+const discoveredRoom = ref<RoomInfo['room'] | null>(null);
 let roomInfoRequestId = 0;
 
 async function handleRoomCodeInput() {
   roomCode.value = roomCode.value.replace(/\D/g, '').slice(0, 2);
   errorMessage.value = '';
   existingNicknames.value = [];
+  discoveredRoom.value = null;
 
   if (roomCode.value.length !== 2) return;
 
@@ -90,6 +86,7 @@ async function handleRoomCodeInput() {
     if (requestId !== roomInfoRequestId) return;
 
     existingNicknames.value = response.data.players.map(player => player.nickname);
+    discoveredRoom.value = response.data.room;
   } catch {
     if (requestId !== roomInfoRequestId) return;
     existingNicknames.value = [];
@@ -103,10 +100,12 @@ function handlePasswordInput() {
 async function joinRoom() {
   try {
     errorMessage.value = '';
-    const response = await roomApi.joinRoom(roomCode.value, nickname.value, chips.value, password.value || undefined);
+    const response = await roomApi.joinRoom(roomCode.value, nickname.value, password.value || undefined);
     const { userId } = response.data;
+    const room = discoveredRoom.value ?? (await roomApi.getRoomInfo(roomCode.value)).data.room;
 
     userStore.setUser(userId, nickname.value, roomCode.value);
+    roomStore.setRoom(roomCode.value, room.id, room.initialChips, room.actionTimeoutEnabled, room.gameType, room.hostId);
     router.push(`/room/${roomCode.value}`);
   } catch (error) {
     console.error('Failed to join room:', error);

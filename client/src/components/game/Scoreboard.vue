@@ -67,9 +67,10 @@
 import { computed, ref } from 'vue';
 import EmojiPanel from './EmojiPanel.vue';
 import type { GamePlayer, GameState } from '../../../../shared/types/game.types';
-import type { RoomPlayer } from '../../../../shared/types/room.types';
+import type { GameType, RoomPlayer } from '../../../../shared/types/room.types';
+import type { CatchMidGameState } from '../../../../shared/types/catch-mid.types';
 
-type DisplayStatus = RoomPlayer['status'] | GamePlayer['status'] | GameState['status'] | 'left';
+type DisplayStatus = RoomPlayer['status'] | GamePlayer['status'] | GameState['status'] | 'left' | 'selected' | 'continued' | 'reveal_confirmed';
 type DisplayPlayer = Omit<RoomPlayer, 'status'> & { status: RoomPlayer['status'] | 'left'; displayStatus: DisplayStatus };
 
 const props = defineProps<{
@@ -78,6 +79,8 @@ const props = defineProps<{
     status: GameState['status'];
     players: { userId: string; status: GamePlayer['status']; chips: number }[];
   } | null;
+  catchMidState?: CatchMidGameState | null;
+  gameType?: GameType;
   leftPlayers?: { userId: string; nickname: string; chips: number }[];
   isEmojiCooldown: boolean;
 }>();
@@ -91,12 +94,25 @@ const displayPlayers = computed<DisplayPlayer[]>(() => {
     // During an active hand, prefer game-level status; after finish, room status carries ready state.
     let displayStatus: DisplayStatus = p.status;
     const gamePlayer = props.gameState?.players.find(gp => gp.userId === p.userId);
+    const catchMidPlayer = props.catchMidState?.players.find(cp => cp.userId === p.userId);
     if (props.gameState?.status === 'playing') {
       if (gamePlayer) {
         displayStatus = gamePlayer.status;
       }
+    } else if (props.catchMidState && catchMidPlayer && isCatchMidActivePhase.value) {
+      if (catchMidPlayer.status === 'out') {
+        displayStatus = 'out';
+      } else if (props.catchMidState.phase === 'selecting' && catchMidPlayer.confirmed) {
+        displayStatus = 'selected';
+      } else if (props.catchMidState.phase === 'round_result' && catchMidPlayer.confirmed) {
+        displayStatus = 'continued';
+      } else if (props.catchMidState.phase === 'confirm_reveal' && catchMidPlayer.revealConfirmed) {
+        displayStatus = 'reveal_confirmed';
+      } else {
+        displayStatus = 'playing';
+      }
     }
-    return { ...p, chips: gamePlayer?.chips ?? p.chips, displayStatus };
+    return { ...p, chips: catchMidPlayer?.chips ?? gamePlayer?.chips ?? p.chips, displayStatus };
   });
 
   // 添加已离开的玩家（仅在游戏中离开的玩家）
@@ -123,8 +139,14 @@ const displayPlayers = computed<DisplayPlayer[]>(() => {
 const showScoreboard = ref(true);
 const showHandReference = ref(false);
 const showEmojiPanel = ref(false);
+const isCatchMidActivePhase = computed(() => {
+  if (!props.catchMidState) return false;
+  return props.catchMidState.phase === 'selecting'
+    || props.catchMidState.phase === 'round_result'
+    || props.catchMidState.phase === 'confirm_reveal';
+});
 
-const handReferences = [
+const texasHandReferences = [
   {
     name: '皇家同花顺',
     description: 'A、K、Q、J、10 同花',
@@ -237,6 +259,74 @@ const handReferences = [
   },
 ];
 
+const catchMidHandReferences = [
+  {
+    name: '王炸',
+    description: '大小王加任意一张牌',
+    cards: [
+      { rank: 'JOKER', symbol: 'B/W', suit: 'joker' },
+      { rank: 'JOKER', symbol: 'COLOR', suit: 'joker-color' },
+      { rank: 'A', symbol: '♠', suit: 'black' },
+    ],
+  },
+  {
+    name: '炸弹',
+    description: '三张相同点数（≈1.05%）',
+    cards: [
+      { rank: '9', symbol: '♥', suit: 'red' },
+      { rank: '9', symbol: '♦', suit: 'red' },
+      { rank: '9', symbol: '♣', suit: 'black' },
+    ],
+  },
+  {
+    name: '同花顺',
+    description: '三张连续同花牌（≈1.00%）',
+    cards: [
+      { rank: 'Q', symbol: '♠', suit: 'black' },
+      { rank: 'J', symbol: '♠', suit: 'black' },
+      { rank: '10', symbol: '♠', suit: 'black' },
+    ],
+  },
+  {
+    name: '同花',
+    description: '三张同花色（≈6.13%）',
+    cards: [
+      { rank: 'A', symbol: '♦', suit: 'red' },
+      { rank: '8', symbol: '♦', suit: 'red' },
+      { rank: '3', symbol: '♦', suit: 'red' },
+    ],
+  },
+  {
+    name: '顺子',
+    description: '三张连续点数（≈5.32%）',
+    cards: [
+      { rank: '8', symbol: '♥', suit: 'red' },
+      { rank: '7', symbol: '♣', suit: 'black' },
+      { rank: '6', symbol: '♦', suit: 'red' },
+    ],
+  },
+  {
+    name: '对子',
+    description: '两张相同点数加踢脚牌（≈20.22%）',
+    cards: [
+      { rank: 'K', symbol: '♥', suit: 'red' },
+      { rank: 'K', symbol: '♠', suit: 'black' },
+      { rank: '4', symbol: '♣', suit: 'black' },
+    ],
+  },
+  {
+    name: '高牌',
+    description: '无以上牌型，比最大单牌（≈66.28%）',
+    cards: [
+      { rank: 'A', symbol: '♣', suit: 'black' },
+      { rank: '10', symbol: '♦', suit: 'red' },
+      { rank: '5', symbol: '♠', suit: 'black' },
+    ],
+  },
+];
+
+const handReferences = computed(() => props.gameType === 'catch-mid' ? catchMidHandReferences : texasHandReferences);
+
 function getStatusText(status: DisplayStatus): string {
   const statusMap: Record<DisplayStatus, string> = {
     joined: '已加入',
@@ -249,6 +339,9 @@ function getStatusText(status: DisplayStatus): string {
     finished: '已结束',
     waiting: '等待中',
     left: '已离开',
+    selected: '已选牌',
+    continued: '已继续',
+    reveal_confirmed: '已亮牌',
   };
   return statusMap[status] || status;
 }
@@ -262,6 +355,9 @@ function getStatusClass(status: DisplayStatus): string {
     left: 'status-left',
     seated: 'status-seated',
     ready: 'status-ready',
+    selected: 'status-ready',
+    continued: 'status-ready',
+    reveal_confirmed: 'status-ready',
     joined: '',
     finished: '',
     waiting: '',
@@ -434,6 +530,19 @@ tbody tr:nth-child(even) td {
 
 .sample-card.black {
   color: #111;
+}
+
+.sample-card.joker,
+.sample-card.joker-color {
+  font-size: 7px;
+  color: #111;
+  border-color: #111;
+}
+
+.sample-card.joker-color {
+  color: #7c3aed;
+  border-color: #7c3aed;
+  background: linear-gradient(135deg, #fff 0 35%, #fde047 35% 50%, #60a5fa 50% 65%, #fb7185 65%);
 }
 
 .hand-desc {

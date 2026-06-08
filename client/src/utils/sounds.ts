@@ -12,6 +12,7 @@ class SoundManager {
       deal: '/sounds/deal.mp3',
       bet: '/sounds/bet.mp3',
       raise: '/sounds/raise.mp3',
+      knock: '/sounds/knock.mp3',
       allin: '/sounds/allin.mp3',
       fold: '/sounds/fold.mp3',
       win: '/sounds/win.mp3',
@@ -58,6 +59,7 @@ class SoundManager {
   playDeal() { this.play('deal'); }
   playBet() { this.play('bet'); }
   playRaise() { this.play('raise'); }
+  playKnock() { this.play('knock'); }
   playAllIn() { this.play('allin'); }
   playFold() { this.play('fold'); }
   playWin() { this.play('win'); }

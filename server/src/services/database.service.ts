@@ -16,7 +16,7 @@ class DatabaseService {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-    if (!supabaseUrl || !supabaseKey) {
+    if (!supabaseUrl || !supabaseKey || this.isPlaceholderConfig(supabaseUrl, supabaseKey)) {
       logger.warn('Supabase credentials not configured, using in-memory storage');
       return;
     }
@@ -27,6 +27,10 @@ class DatabaseService {
 
   getClient(): SupabaseClient | null {
     return this.client;
+  }
+
+  private isPlaceholderConfig(supabaseUrl: string, supabaseKey: string): boolean {
+    return supabaseUrl.startsWith('your-') || supabaseKey.startsWith('your-');
   }
 
   async query(table: string, query?: QueryOptions): Promise<DatabaseRow[]> {

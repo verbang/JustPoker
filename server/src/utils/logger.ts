@@ -15,6 +15,9 @@ class Logger {
   private formatMessage(level: string, message: string, data?: unknown): string {
     const timestamp = new Date().toISOString();
     const base = `[${timestamp}] [${level}] ${message}`;
+    if (data instanceof Error) {
+      return `${base} ${JSON.stringify({ message: data.message, stack: data.stack })}`;
+    }
     return data ? `${base} ${JSON.stringify(data)}` : base;
   }
 

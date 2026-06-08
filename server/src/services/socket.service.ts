@@ -6,6 +6,9 @@ import { ACTION_TIMEOUT, EMOJI_RATE_LIMIT_WINDOW, EMOJI_RATE_LIMIT_COUNT } from 
 import { roomService } from '../modules/room/room.service';
 import { GameEngine } from '../modules/game/game.engine';
 import { GameState, GamePlayer, PlayerAction, Card } from '../../../shared/types/game.types';
+import { CatchMidEngine } from '../modules/catch-mid/catch-mid.engine';
+import { CatchMidGameState, CatchMidLeavePenaltyResult, CatchMidRoundResult } from '../../../shared/types/catch-mid.types';
+import { RoomPlayer } from '../../../shared/types/room.types';
 
 interface SocketPayload {
   [key: string]: unknown;
@@ -15,6 +18,12 @@ class SocketService {
   private io: Server | null = null;
   private gameEngines: Map<string, GameEngine> = new Map();
   private gameStates: Map<string, GameState> = new Map();
+  private catchMidEngines: Map<string, CatchMidEngine> = new Map();
+  private catchMidStates: Map<string, CatchMidGameState> = new Map();
+  private catchMidAutoPlayers: Map<string, Set<string>> = new Map();
+  private catchMidActionTimers: Map<string, NodeJS.Timeout> = new Map();
+  private catchMidActionTimeoutStart: Map<string, number> = new Map();
+  private catchMidActionKeys: Map<string, string> = new Map();
   private dealerSeatNumbers: Map<string, number> = new Map();
   private countdowns: Map<string, NodeJS.Timeout> = new Map();
   private actionTimers: Map<string, NodeJS.Timeout> = new Map();
@@ -104,6 +113,11 @@ class SocketService {
           }
         }
 
+        const catchMidState = this.catchMidStates.get(data.roomCode);
+        if (catchMidState) {
+          this.emitToSocket(socket.id, SOCKET_EVENTS.CATCH_MID_GAME_UPDATE, this.withCatchMidActionRemaining(data.roomCode, catchMidState));
+        }
+
         // 游戏已结束但亮牌窗口仍在：恢复赢家的亮牌能力
         const pending = this.pendingReveals.get(data.roomCode);
         if (pending && pending.userId === data.userId) {
@@ -130,6 +144,26 @@ class SocketService {
         const disconnectedKey = `${roomCode}:${userId}`;
         this.disconnectedPlayers.delete(disconnectedKey);
         this.clearReconnectTimeout(disconnectedKey);
+
+        const room = roomService.getRoom(roomCode);
+
+        // Catch Mid 游戏中离开：支付惩罚并立即结束本局。
+        const catchMidState = this.catchMidStates.get(roomCode);
+        const catchMidPlayer = catchMidState?.players.find(player => player.userId === userId);
+        if (room?.gameType === 'catch-mid' && catchMidPlayer?.status === 'playing') {
+          const leavePenaltyResult = this.handleCatchMidActiveLeave(roomCode, userId);
+          socket.leave(roomCode);
+          this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, {
+            userId,
+            reason: 'leave',
+            nickname: leavePenaltyResult?.nickname,
+            chips: leavePenaltyResult
+              ? leavePenaltyResult.payments.reduce((chips, payment) => chips - payment.amount, catchMidPlayer.chips)
+              : catchMidPlayer.chips,
+          });
+          this.emitToRoom(roomCode, SOCKET_EVENTS.PLAY_SOUND, { sound: 'door' });
+          return;
+        }
 
         // 检查是否在游戏中
         const gameState = this.gameStates.get(roomCode);
@@ -168,7 +202,6 @@ class SocketService {
           }
         }
 
-        // 检查是否在倒计时中
         const countdown = this.countdowns.get(roomCode);
         if (countdown) {
           // 取消倒计时
@@ -182,7 +215,6 @@ class SocketService {
         }
 
         // 检查是否是房主，如果是则转移房主
-        const room = roomService.getRoom(roomCode);
         if (room && room.hostId === userId) {
           const newHostId = roomService.getRoomManager().transferHost(roomCode, userId);
           if (newHostId) {
@@ -232,6 +264,22 @@ class SocketService {
         this.handlePlayerAction(data.roomCode, socket.data.userId, data.action, data.amount);
       });
 
+      socket.on(SOCKET_EVENTS.CATCH_MID_SELECT_CARDS, (data: { roomCode: string; cardIds: string[] }) => {
+        this.handleCatchMidSelectCards(data.roomCode, socket.data.userId, data.cardIds);
+      });
+
+      socket.on(SOCKET_EVENTS.CATCH_MID_CONFIRM_CARDS, (data: { roomCode: string }) => {
+        this.handleCatchMidConfirmCards(data.roomCode, socket.data.userId);
+      });
+
+      socket.on(SOCKET_EVENTS.CATCH_MID_CONFIRM_REVEAL, (data: { roomCode: string }) => {
+        this.handleCatchMidConfirmReveal(data.roomCode, socket.data.userId);
+      });
+
+      socket.on(SOCKET_EVENTS.CATCH_MID_ADVANCE_ROUND, (data: { roomCode: string }) => {
+        this.handleCatchMidAdvanceRound(data.roomCode, socket.data.userId);
+      });
+
       // Send emoji
       socket.on(SOCKET_EVENTS.SEND_EMOJI, (data: { roomCode: string; emoji: string }) => {
         const userId = socket.data.userId as string;
@@ -257,7 +305,7 @@ class SocketService {
 
       // Rebuy
       socket.on(SOCKET_EVENTS.REBUY, (data: { roomCode: string; amount: number }) => {
-        if (this.gameStates.has(data.roomCode)) {
+        if (this.gameStates.has(data.roomCode) || this.catchMidStates.has(data.roomCode)) {
           this.emitToUser(socket.data.userId, SOCKET_EVENTS.ERROR, { message: '游戏进行中不能重新买入' });
           return;
         }
@@ -354,6 +402,34 @@ class SocketService {
             }
           }
 
+          const catchMidState = this.catchMidStates.get(roomCode);
+          const catchMidPlayer = catchMidState?.players.find(player => player.userId === userId);
+          if (catchMidPlayer?.status === 'playing') {
+            this.disconnectedPlayers.set(`${roomCode}:${userId}`, {
+              userId,
+              roomCode,
+              timestamp: Date.now(),
+              actionElapsedMs: 0,
+            });
+            logger.info(`Catch Mid 玩家 ${userId} 断线，等待重连...`);
+
+            const disconnectedKey = `${roomCode}:${userId}`;
+            this.clearReconnectTimeout(disconnectedKey);
+            const reconnectTimer = setTimeout(() => {
+              const disconnectedInfo = this.disconnectedPlayers.get(disconnectedKey);
+              if (disconnectedInfo) {
+                logger.info(`Catch Mid 玩家 ${userId} 重连超时，系统托管确认`);
+                this.disconnectedPlayers.delete(disconnectedKey);
+                this.reconnectTimers.delete(disconnectedKey);
+                this.handleCatchMidPlayerDisconnect(roomCode, userId);
+              }
+            }, this.RECONNECT_TIMEOUT_MS);
+            this.reconnectTimers.set(disconnectedKey, reconnectTimer);
+
+            this.emitToRoom(roomCode, SOCKET_EVENTS.PLAYER_LEFT, { userId, reason: 'disconnect', reconnecting: true });
+            return;
+          }
+
           // 非游戏中断线，也给 30 秒重连窗口
           this.disconnectedPlayers.set(`${roomCode}:${userId}`, {
             userId,
@@ -394,12 +470,16 @@ class SocketService {
   private checkAndStartCountdown(roomCode: string): void {
     // Don't start if game is already in progress
     if (this.gameStates.has(roomCode)) return;
+    if (this.catchMidStates.has(roomCode)) return;
 
     // Don't start if countdown is already running
     if (this.countdowns.has(roomCode)) return;
 
     // Check if all seated players are ready
     if (!roomService.allSeatedPlayersReady(roomCode)) return;
+
+    const room = roomService.getRoom(roomCode);
+    if (!room) return;
 
     logger.info(`All players ready in room ${roomCode}, starting countdown`);
 
@@ -428,15 +508,21 @@ class SocketService {
   private startGame(roomCode: string): void {
     // Get ready players (they are the ones who will play)
     const allPlayers = roomService.getRoomPlayers(roomCode);
+    const room = roomService.getRoom(roomCode);
+    if (!room) return;
+
     const readyPlayers = allPlayers
       .filter(p => p.status === 'ready')
-      .sort((a, b) => (a.seatNumber || 0) - (b.seatNumber || 0));
-
-    // Need at least 2 players to start
-    if (readyPlayers.length < 2) return;
+      .sort((a, b) => {
+        if (room.gameType === 'catch-mid') {
+          return a.joinedAt.getTime() - b.joinedAt.getTime();
+        }
+        return (a.seatNumber || 0) - (b.seatNumber || 0);
+      });
 
     // Don't start if game is already in progress
     if (this.gameStates.has(roomCode)) return;
+    if (this.catchMidStates.has(roomCode)) return;
 
     // 清除上一局的亮牌数据
     this.completedReveals.delete(roomCode);
@@ -446,8 +532,13 @@ class SocketService {
       this.pendingReveals.delete(roomCode);
     }
 
-    const room = roomService.getRoom(roomCode);
-    if (!room) return;
+    if (room.gameType === 'catch-mid') {
+      this.startCatchMidGame(roomCode, readyPlayers);
+      return;
+    }
+
+    // Need at least 2 players to start
+    if (readyPlayers.length < 2) return;
 
     // Convert RoomPlayers to GamePlayers
     const gamePlayers: GamePlayer[] = readyPlayers.map(p => ({
@@ -525,6 +616,375 @@ class SocketService {
       this.emitToUser(userId, SOCKET_EVENTS.ERROR, { message: errorMessage });
       this.scheduleActionTimeout(roomCode, currentState);
     }
+  }
+
+  private startCatchMidGame(roomCode: string, readyPlayers: RoomPlayer[]): void {
+    if (readyPlayers.length < 3 || readyPlayers.length > 4) return;
+
+    const engine = new CatchMidEngine();
+    const gameState = engine.startGame(roomCode, readyPlayers);
+    this.catchMidEngines.set(roomCode, engine);
+    this.catchMidStates.set(roomCode, gameState);
+    this.catchMidAutoPlayers.delete(roomCode);
+
+    readyPlayers.forEach(player => {
+      roomService.getRoomManager().updatePlayerStatus(roomCode, player.userId, 'playing');
+    });
+
+    logger.info(`Catch Mid game started in room ${roomCode} with ${readyPlayers.length} players`);
+    this.scheduleCatchMidActionTimeout(roomCode, gameState);
+    const gameStateWithTimer = this.withCatchMidActionRemaining(roomCode, gameState);
+    this.emitToRoom(roomCode, SOCKET_EVENTS.CATCH_MID_GAME_START, { gameState: gameStateWithTimer });
+    this.emitCatchMidGameUpdate(roomCode, gameState);
+  }
+
+  private handleCatchMidSelectCards(roomCode: string, userId: string, cardIds: string[]): void {
+    const engine = this.catchMidEngines.get(roomCode);
+    const currentState = this.catchMidStates.get(roomCode);
+    if (!engine || !currentState) return;
+
+    try {
+      const newState = engine.selectCards(currentState, userId, cardIds);
+      this.catchMidStates.set(roomCode, newState);
+      this.emitCatchMidGameUpdate(roomCode, newState);
+    } catch (error: unknown) {
+      this.emitCatchMidError(userId, error);
+    }
+  }
+
+  private handleCatchMidConfirmCards(roomCode: string, userId: string): void {
+    const engine = this.catchMidEngines.get(roomCode);
+    const currentState = this.catchMidStates.get(roomCode);
+    if (!engine || !currentState) return;
+
+    try {
+      const newState = engine.confirmSelection(currentState, userId);
+      const finalState = this.updateCatchMidState(roomCode, currentState, newState);
+      this.handleCatchMidFinishedPhase(roomCode, finalState);
+    } catch (error: unknown) {
+      this.emitCatchMidError(userId, error);
+    }
+  }
+
+  private handleCatchMidConfirmReveal(roomCode: string, userId: string): void {
+    const engine = this.catchMidEngines.get(roomCode);
+    const currentState = this.catchMidStates.get(roomCode);
+    if (!engine || !currentState) return;
+
+    try {
+      const newState = engine.confirmReveal(currentState, userId);
+      const finalState = this.updateCatchMidState(roomCode, currentState, newState);
+      this.handleCatchMidFinishedPhase(roomCode, finalState);
+    } catch (error: unknown) {
+      this.emitCatchMidError(userId, error);
+    }
+  }
+
+  private handleCatchMidAutoConfirm(roomCode: string, userId: string): void {
+    const engine = this.catchMidEngines.get(roomCode);
+    const currentState = this.catchMidStates.get(roomCode);
+    if (!engine || !currentState) return;
+
+    try {
+      const newState = engine.autoConfirmCurrentPhase(currentState, userId);
+      const finalState = this.updateCatchMidState(roomCode, currentState, newState);
+      this.handleCatchMidFinishedPhase(roomCode, finalState);
+    } catch (error: unknown) {
+      this.emitCatchMidError(userId, error);
+    }
+  }
+
+  private addCatchMidAutoPlayer(roomCode: string, userId: string): void {
+    const autoPlayers = this.catchMidAutoPlayers.get(roomCode) ?? new Set<string>();
+    autoPlayers.add(userId);
+    this.catchMidAutoPlayers.set(roomCode, autoPlayers);
+  }
+
+  private updateCatchMidState(
+    roomCode: string,
+    previousState: CatchMidGameState,
+    nextState: CatchMidGameState
+  ): CatchMidGameState {
+    let currentState = nextState;
+    const autoPlayers = this.catchMidAutoPlayers.get(roomCode);
+    if (autoPlayers && autoPlayers.size > 0) {
+      currentState = this.applyCatchMidAutoPlayers(roomCode, previousState, currentState, autoPlayers);
+    }
+
+    this.catchMidStates.set(roomCode, currentState);
+
+    const resolvedNewRound = currentState.lastRoundResult
+      && currentState.lastRoundResult.round !== previousState.lastRoundResult?.round;
+    if (resolvedNewRound && currentState.lastRoundResult) {
+      this.syncCatchMidRoomChips(roomCode, currentState);
+      this.emitToRoom(roomCode, SOCKET_EVENTS.CATCH_MID_ROUND_RESULT, currentState.lastRoundResult);
+    }
+
+    this.scheduleCatchMidActionTimeout(roomCode, currentState);
+    this.emitCatchMidGameUpdate(roomCode, currentState);
+
+    return currentState;
+  }
+
+  private syncCatchMidRoomChips(roomCode: string, gameState: CatchMidGameState): void {
+    const roomPlayers = roomService.getRoomPlayers(roomCode);
+    gameState.players.forEach(player => {
+      const roomPlayer = roomPlayers.find(item => item.userId === player.userId);
+      if (roomPlayer) {
+        roomPlayer.chips = player.chips;
+      }
+    });
+    this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players: roomPlayers });
+  }
+
+  private emitCatchMidGameUpdate(roomCode: string, gameState: CatchMidGameState): void {
+    this.emitToRoom(roomCode, SOCKET_EVENTS.CATCH_MID_GAME_UPDATE, this.withCatchMidActionRemaining(roomCode, gameState));
+  }
+
+  private withCatchMidActionRemaining(roomCode: string, gameState: CatchMidGameState): CatchMidGameState {
+    const remainingMs = this.getCatchMidActionRemainingMs(roomCode);
+    if (remainingMs === null) {
+      const { actionRemainingMs, ...stateWithoutTimer } = gameState;
+      return stateWithoutTimer;
+    }
+    return { ...gameState, actionRemainingMs: remainingMs };
+  }
+
+  private scheduleCatchMidActionTimeout(roomCode: string, gameState: CatchMidGameState): void {
+    const room = roomService.getRoom(roomCode);
+    if (!room?.actionTimeoutEnabled || gameState.phase !== 'selecting' && gameState.phase !== 'confirm_reveal') {
+      this.clearCatchMidActionTimeout(roomCode);
+      return;
+    }
+
+    const pendingPlayers = gameState.players.filter(player => {
+      if (player.status !== 'playing') return false;
+      if (gameState.phase === 'selecting') return !player.confirmed;
+      return !player.revealConfirmed;
+    });
+    if (pendingPlayers.length === 0) {
+      this.clearCatchMidActionTimeout(roomCode);
+      return;
+    }
+
+    const actionKey = `${gameState.id}:${gameState.round}:${gameState.phase}`;
+    if (this.catchMidActionKeys.get(roomCode) === actionKey && this.catchMidActionTimers.has(roomCode)) {
+      return;
+    }
+
+    this.clearCatchMidActionTimeout(roomCode);
+
+    this.catchMidActionKeys.set(roomCode, actionKey);
+    this.catchMidActionTimeoutStart.set(roomCode, Date.now());
+    const timer = setTimeout(() => {
+      this.handleCatchMidActionTimeout(roomCode, gameState.id, gameState.round, gameState.phase);
+    }, ACTION_TIMEOUT * 1000);
+    this.catchMidActionTimers.set(roomCode, timer);
+  }
+
+  private clearCatchMidActionTimeout(roomCode: string): void {
+    const timer = this.catchMidActionTimers.get(roomCode);
+    if (timer) {
+      clearTimeout(timer);
+      this.catchMidActionTimers.delete(roomCode);
+    }
+    this.catchMidActionTimeoutStart.delete(roomCode);
+    this.catchMidActionKeys.delete(roomCode);
+  }
+
+  private getCatchMidActionRemainingMs(roomCode: string): number | null {
+    const start = this.catchMidActionTimeoutStart.get(roomCode);
+    if (!start) return null;
+    const elapsed = Date.now() - start;
+    return Math.max(0, ACTION_TIMEOUT * 1000 - elapsed);
+  }
+
+  private handleCatchMidActionTimeout(
+    roomCode: string,
+    stateId: string,
+    round: number,
+    phase: CatchMidGameState['phase']
+  ): void {
+    const engine = this.catchMidEngines.get(roomCode);
+    let currentState = this.catchMidStates.get(roomCode);
+    if (!engine || !currentState) return;
+    if (currentState.id !== stateId || currentState.round !== round || currentState.phase !== phase) return;
+    if (phase !== 'selecting' && phase !== 'confirm_reveal') return;
+
+    this.clearCatchMidActionTimeout(roomCode);
+
+    const pendingUserIds = currentState.players
+      .filter(player => {
+        if (player.status !== 'playing') return false;
+        if (phase === 'selecting') return !player.confirmed;
+        return !player.revealConfirmed;
+      })
+      .map(player => player.userId);
+
+    for (const pendingUserId of pendingUserIds) {
+      try {
+        const previousState = currentState;
+        const nextState = engine.autoConfirmCurrentPhase(currentState, pendingUserId);
+        currentState = this.updateCatchMidState(roomCode, previousState, nextState);
+        if (currentState.phase !== phase || currentState.round !== round) {
+          break;
+        }
+      } catch (error: unknown) {
+        this.emitCatchMidError(pendingUserId, error);
+      }
+    }
+
+    this.handleCatchMidFinishedPhase(roomCode, currentState);
+  }
+
+  private applyCatchMidAutoPlayers(
+    roomCode: string,
+    previousState: CatchMidGameState,
+    nextState: CatchMidGameState,
+    autoPlayers: Set<string>
+  ): CatchMidGameState {
+    const engine = this.catchMidEngines.get(roomCode);
+    if (!engine || nextState.phase !== 'selecting' && nextState.phase !== 'round_result' && nextState.phase !== 'confirm_reveal') {
+      return nextState;
+    }
+
+    let currentState = nextState;
+    for (const userId of autoPlayers) {
+      const player = currentState.players.find(item => item.userId === userId);
+      if (!player || player.status !== 'playing') continue;
+      const beforeRound = currentState.lastRoundResult?.round ?? previousState.lastRoundResult?.round;
+      currentState = engine.autoConfirmCurrentPhase(currentState, userId);
+      const afterRound = currentState.lastRoundResult?.round;
+      if (currentState.phase === 'round_result' && afterRound !== beforeRound) {
+        break;
+      }
+    }
+
+    return currentState;
+  }
+
+  private handleCatchMidAdvanceRound(roomCode: string, userId: string): void {
+    const engine = this.catchMidEngines.get(roomCode);
+    const currentState = this.catchMidStates.get(roomCode);
+    if (!engine || !currentState) return;
+
+    try {
+      const newState = engine.confirmContinueAfterRoundResult(currentState, userId);
+      const finalState = this.updateCatchMidState(roomCode, currentState, newState);
+
+      this.handleCatchMidFinishedPhase(roomCode, finalState);
+    } catch (error: unknown) {
+      this.emitCatchMidError(userId, error);
+    }
+  }
+
+  private handleCatchMidActiveLeave(roomCode: string, userId: string): CatchMidLeavePenaltyResult | null {
+    const currentState = this.catchMidStates.get(roomCode);
+    if (!currentState) return null;
+
+    this.clearCatchMidActionTimeout(roomCode);
+
+    const leavingPlayer = currentState.players.find(player => player.userId === userId);
+    if (!leavingPlayer) return null;
+
+    const recipients = roomService.getRoomPlayers(roomCode)
+      .filter(player => player.userId !== userId && player.status !== 'out');
+    const penaltyPerPlayer = 5;
+    const payments = recipients.map(recipient => ({
+      fromUserId: userId,
+      toUserId: recipient.userId,
+      amount: penaltyPerPlayer,
+      multiplier: 1 as const,
+    }));
+
+    const nextState: CatchMidGameState = {
+      ...currentState,
+      players: currentState.players.map(player => {
+        if (player.userId === userId) {
+          return {
+            ...player,
+            chips: player.chips - penaltyPerPlayer * recipients.length,
+            status: 'out' as const,
+          };
+        }
+        const shouldReceivePenalty = recipients.some(recipient => recipient.userId === player.userId);
+        return shouldReceivePenalty ? { ...player, chips: player.chips + penaltyPerPlayer } : player;
+      }),
+      communityCards: currentState.communityCards.map(item => ({ ...item })),
+      discardPile: [...currentState.discardPile],
+      roundResults: [...currentState.roundResults],
+      eliminatedPlayerIds: Array.from(new Set([...currentState.eliminatedPlayerIds, userId])),
+      finalRanking: currentState.players
+        .map(player => ({
+          userId: player.userId,
+          chips: player.userId === userId
+            ? player.chips - penaltyPerPlayer * recipients.length
+            : player.chips + (recipients.some(recipient => recipient.userId === player.userId) ? penaltyPerPlayer : 0),
+        }))
+        .sort((a, b) => b.chips - a.chips)
+        .map(player => player.userId),
+      phase: 'finished',
+      canStartNextHand: recipients.length >= 3,
+      leavePenaltyResult: {
+        userId,
+        nickname: leavingPlayer.nickname,
+        penaltyPerPlayer,
+        payments,
+      },
+    };
+
+    this.syncCatchMidRoomChips(roomCode, nextState);
+
+    this.handleCatchMidGameFinished(roomCode, nextState);
+    const room = roomService.getRoom(roomCode);
+    if (room && room.hostId === userId) {
+      const newHostId = roomService.getRoomManager().transferHost(roomCode, userId);
+      if (newHostId) {
+        logger.info(`房间 ${roomCode} 房主从 ${userId} 转移给 ${newHostId}`);
+      }
+    }
+    roomService.leaveRoom(roomCode, userId);
+    const players = roomService.getRoomPlayers(roomCode);
+    this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
+
+    return nextState.leavePenaltyResult ?? null;
+  }
+
+  private handleCatchMidGameFinished(roomCode: string, gameState: CatchMidGameState): void {
+    this.clearCatchMidActionTimeout(roomCode);
+
+    gameState.players.forEach(player => {
+      const roomPlayer = roomService.getRoomPlayers(roomCode).find(item => item.userId === player.userId);
+      if (!roomPlayer) return;
+      roomPlayer.chips = player.chips;
+      roomService.getRoomManager().updatePlayerStatus(roomCode, player.userId, player.status === 'out' ? 'out' : 'seated');
+    });
+
+    this.catchMidEngines.delete(roomCode);
+    this.catchMidStates.delete(roomCode);
+    this.catchMidAutoPlayers.delete(roomCode);
+
+    const players = roomService.getRoomPlayers(roomCode);
+    this.emitToRoom(roomCode, SOCKET_EVENTS.ROOM_UPDATE, { players });
+    this.emitToRoom(roomCode, SOCKET_EVENTS.CATCH_MID_GAME_OVER, {
+      phase: gameState.phase,
+      eliminatedPlayerIds: gameState.eliminatedPlayerIds,
+      canStartNextHand: gameState.canStartNextHand,
+      finalRanking: gameState.finalRanking,
+      gameState: this.withCatchMidActionRemaining(roomCode, gameState)
+    });
+  }
+
+  private handleCatchMidFinishedPhase(roomCode: string, gameState: CatchMidGameState): void {
+    if (gameState.phase === 'finished' || gameState.phase === 'game_over' || gameState.phase === 'game_draw') {
+      this.handleCatchMidGameFinished(roomCode, gameState);
+    }
+  }
+
+  private emitCatchMidError(userId: string, error: unknown): void {
+    const message = error instanceof Error ? error.message : 'Catch Mid 操作失败';
+    logger.error(`Catch Mid error: ${message}`);
+    this.emitToUser(userId, SOCKET_EVENTS.ERROR, { message });
   }
 
   private handleGameFinished(roomCode: string, gameState: GameState): void {
@@ -665,11 +1125,11 @@ class SocketService {
     return this.io;
   }
 
-  emitToRoom(roomId: string, event: string, data: SocketPayload | GameState): void {
+  emitToRoom(roomId: string, event: string, data: SocketPayload | GameState | CatchMidGameState | CatchMidRoundResult): void {
     this.io?.to(roomId).emit(event, data);
   }
 
-  emitToSocket(socketId: string, event: string, data: SocketPayload | GameState): void {
+  emitToSocket(socketId: string, event: string, data: SocketPayload | GameState | CatchMidGameState | CatchMidRoundResult): void {
     this.io?.to(socketId).emit(event, data);
   }
 
@@ -718,6 +1178,12 @@ class SocketService {
     this.handlePlayerLeaveRoom(roomCode, userId);
   }
 
+  private handleCatchMidPlayerDisconnect(roomCode: string, userId: string): void {
+    this.addCatchMidAutoPlayer(roomCode, userId);
+    this.handleCatchMidAutoConfirm(roomCode, userId);
+    this.handlePlayerLeaveRoom(roomCode, userId);
+  }
+
   /**
    * 处理玩家离开房间
    */
@@ -743,8 +1209,12 @@ class SocketService {
    */
   private cleanupRoomGameState(roomCode: string): void {
     this.clearActionTimeout(roomCode);
+    this.clearCatchMidActionTimeout(roomCode);
     this.gameEngines.delete(roomCode);
     this.gameStates.delete(roomCode);
+    this.catchMidEngines.delete(roomCode);
+    this.catchMidStates.delete(roomCode);
+    this.catchMidAutoPlayers.delete(roomCode);
     this.dealerSeatNumbers.delete(roomCode);
 
     const countdown = this.countdowns.get(roomCode);

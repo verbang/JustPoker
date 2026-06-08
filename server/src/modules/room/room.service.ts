@@ -16,7 +16,8 @@ export class RoomService {
       request.nickname,
       request.initialChips,
       request.password,
-      request.actionTimeoutEnabled ?? false
+      request.actionTimeoutEnabled ?? false,
+      request.gameType
     );
     if (!room) return null;
 
@@ -25,6 +26,7 @@ export class RoomService {
       id: room.id,
       room_code: room.roomCode,
       host_id: room.hostId,
+      game_type: room.gameType,
       status: room.status,
       small_blind: room.smallBlind,
       big_blind: room.bigBlind,
@@ -36,8 +38,8 @@ export class RoomService {
     return room;
   }
 
-  async joinRoom(roomCode: string, userId: string, nickname: string, chips: number, password?: string): Promise<RoomPlayer | null> {
-    const player = this.roomManager.joinRoom(roomCode, userId, nickname, chips, password);
+  async joinRoom(roomCode: string, userId: string, nickname: string, password?: string): Promise<RoomPlayer | null> {
+    const player = this.roomManager.joinRoom(roomCode, userId, nickname, password);
 
     if (player) {
       logger.info(`Player ${nickname} joined room ${roomCode}`);
@@ -88,6 +90,14 @@ export class RoomService {
 
   allSeatedPlayersReady(roomCode: string): boolean {
     return this.roomManager.allSeatedPlayersReady(roomCode);
+  }
+
+  getMaxSeats(roomCode: string): number {
+    return this.roomManager.getMaxSeats(roomCode);
+  }
+
+  getMinPlayers(roomCode: string): number {
+    return this.roomManager.getMinPlayers(roomCode);
   }
 
   getRoomManager(): RoomManager {

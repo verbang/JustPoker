@@ -14,7 +14,6 @@
       class="action-ring"
       :style="{ '--action-progress': `${actionProgress}deg` }"
     ></div>
-
     <!-- Floating emojis -->
     <div class="emoji-container">
       <transition-group name="emoji-float">
@@ -200,7 +199,7 @@ function handleTip() {
   inset: -7px;
   border-radius: 14px;
   background:
-    conic-gradient(from -90deg, var(--error) var(--action-progress), rgba(239,68,68,0.08) 0);
+    conic-gradient(from 0deg, var(--error) var(--action-progress), rgba(239,68,68,0.08) 0);
   pointer-events: none;
   z-index: -1;
 }

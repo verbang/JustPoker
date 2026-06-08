@@ -1,4 +1,4 @@
-import { RoomManager } from '../room.manager';
+﻿import { RoomManager } from '../room.manager';
 
 describe('RoomManager 重连窗口期行为', () => {
   let manager: RoomManager;
@@ -14,7 +14,7 @@ describe('RoomManager 重连窗口期行为', () => {
   test('玩家断线后仍在房间玩家列表中', () => {
     const room = manager.createRoom('host1', 'Host', 100);
     if (!room) throw new Error('房间创建失败');
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
 
     // 模拟断线但未移除玩家
     const players = manager.getRoomPlayers(room.roomCode);
@@ -25,7 +25,7 @@ describe('RoomManager 重连窗口期行为', () => {
   test('超时后移除玩家', () => {
     const room = manager.createRoom('host1', 'Host', 100);
     if (!room) throw new Error('房间创建失败');
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
 
     // 模拟超时移除
     manager.leaveRoom(room.roomCode, 'user1');
@@ -37,7 +37,7 @@ describe('RoomManager 重连窗口期行为', () => {
   test('重连成功后玩家仍在房间中', () => {
     const room = manager.createRoom('host1', 'Host', 100);
     if (!room) throw new Error('房间创建失败');
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
 
     // 模拟断线期间不移除玩家
     let players = manager.getRoomPlayers(room.roomCode);
@@ -52,7 +52,7 @@ describe('RoomManager 重连窗口期行为', () => {
   test('非游戏状态断线后房间保持', () => {
     const room = manager.createRoom('host1', 'Host', 100);
     if (!room) throw new Error('房间创建失败');
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
 
     // 断线后房间应仍然存在
     const retrievedRoom = manager.getRoom(room.roomCode);
@@ -60,3 +60,4 @@ describe('RoomManager 重连窗口期行为', () => {
     expect(retrievedRoom?.roomCode).toBe(room.roomCode);
   });
 });
+

@@ -69,6 +69,15 @@
 | `room_players` | 房间内玩家（昵称、座位、筹码、状态等） |
 | `game_records` | 游戏记录（赢家、牌型、底池等） |
 
+### 迁移记录
+
+- `rooms.game_type`: 游戏类型字段，默认 `texas-holdem`，用于区分德州扑克和 Catch Mid 房间。生产库部署 Catch Mid 房间创建前，需要执行：
+
+```sql
+ALTER TABLE rooms
+ADD COLUMN IF NOT EXISTS game_type VARCHAR(30) DEFAULT 'texas-holdem';
+```
+
 ---
 
 ## 重新部署流程

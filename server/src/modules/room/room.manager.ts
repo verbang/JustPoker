@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Room, RoomPlayer, PlayerStatus } from '../../../../shared/types/room.types';
-import { MAX_SEATS } from '../../../../shared/constants/game.constants';
+import { Room, RoomPlayer, PlayerStatus, GameType } from '../../../../shared/types/room.types';
+import { DEFAULT_GAME_TYPE, GAME_TYPE_MAX_SEATS, GAME_TYPE_MIN_PLAYERS } from '../../../../shared/constants/game.constants';
 import { logger } from '../../utils/logger';
 
 // 空房间清理间隔（5分钟）
@@ -77,7 +77,8 @@ export class RoomManager {
     hostNickname: string,
     initialChips: number,
     password?: string,
-    actionTimeoutEnabled = false
+    actionTimeoutEnabled = false,
+    gameType: GameType = DEFAULT_GAME_TYPE
   ): Room | null {
     const roomCode = this.generateRoomCode();
     if (!roomCode) return null;
@@ -86,6 +87,7 @@ export class RoomManager {
       id: uuidv4(),
       roomCode,
       hostId,
+      gameType,
       status: 'waiting',
       smallBlind: 5,
       bigBlind: 10,
@@ -101,13 +103,15 @@ export class RoomManager {
     this.roomPlayers.set(roomCode, players);
     this.updateRoomActivity(roomCode);
 
-    // Add host as first player, directly seated at position 1
+    const isCatchMid = gameType === 'catch-mid';
+
+    // 德州扑克房主自动坐 1 号位；Catch Mid 不使用座位，加入后直接进入待准备状态。
     const hostPlayer: RoomPlayer = {
       id: uuidv4(),
       roomId: room.id,
       userId: hostId,
       nickname: hostNickname,
-      seatNumber: 1,
+      seatNumber: isCatchMid ? null : 1,
       chips: initialChips,
       status: 'seated',
       joinedAt: new Date(),
@@ -117,10 +121,9 @@ export class RoomManager {
     return room;
   }
 
-  joinRoom(roomCode: string, userId: string, nickname: string, chips: number, password?: string): RoomPlayer | null {
+  joinRoom(roomCode: string, userId: string, nickname: string, password?: string): RoomPlayer | null {
     const room = this.rooms.get(roomCode);
     if (!room) return null;
-    if (!Number.isInteger(chips) || chips <= 0) return null;
 
     // Verify password if room has one
     if (room.password && room.password !== password) {
@@ -140,8 +143,8 @@ export class RoomManager {
       userId,
       nickname,
       seatNumber: null,
-      chips,
-      status: 'joined',
+      chips: room.initialChips,
+      status: room.gameType === 'catch-mid' ? 'seated' : 'joined',
       joinedAt: new Date(),
     };
 
@@ -168,17 +171,25 @@ export class RoomManager {
    * 检查房间是否已满员（所有座位都被占用）
    */
   isRoomFull(roomCode: string): boolean {
+    const room = this.rooms.get(roomCode);
     const players = this.roomPlayers.get(roomCode);
     if (!players) return false;
 
+    if (room?.gameType === 'catch-mid') {
+      return players.size >= this.getMaxSeats(roomCode);
+    }
+
     const seatedCount = Array.from(players.values()).filter(p => p.seatNumber !== null).length;
-    return seatedCount >= MAX_SEATS;
+    return seatedCount >= this.getMaxSeats(roomCode);
   }
 
   selectSeat(roomCode: string, userId: string, seatNumber: number): boolean {
+    const room = this.rooms.get(roomCode);
+    if (room?.gameType === 'catch-mid') return false;
+
     const players = this.roomPlayers.get(roomCode);
     if (!players) return false;
-    if (!Number.isInteger(seatNumber) || seatNumber < 1 || seatNumber > MAX_SEATS) return false;
+    if (!Number.isInteger(seatNumber) || seatNumber < 1 || seatNumber > this.getMaxSeats(roomCode)) return false;
 
     // Check if seat is occupied
     for (const player of players.values()) {
@@ -218,6 +229,15 @@ export class RoomManager {
 
     const currentHost = players.get(currentHostId);
     if (!currentHost) return null;
+
+    if (room.gameType === 'catch-mid') {
+      const nextHost = Array.from(players.values())
+        .filter(p => p.userId !== currentHostId)
+        .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
+      if (!nextHost) return null;
+      room.hostId = nextHost.userId;
+      return nextHost.userId;
+    }
 
     const currentSeatNumber = currentHost.seatNumber || 0;
 
@@ -266,6 +286,13 @@ export class RoomManager {
   }
 
   getSeatedPlayers(roomCode: string): RoomPlayer[] {
+    const room = this.rooms.get(roomCode);
+    if (room?.gameType === 'catch-mid') {
+      return this.getRoomPlayers(roomCode)
+        .filter(p => p.status === 'seated' || p.status === 'ready' || p.status === 'playing')
+        .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime());
+    }
+
     return this.getRoomPlayers(roomCode)
       .filter(p => p.status === 'seated' || p.status === 'ready' || p.status === 'playing')
       .sort((a, b) => (a.seatNumber || 0) - (b.seatNumber || 0));
@@ -290,9 +317,19 @@ export class RoomManager {
     const players = this.getRoomPlayers(roomCode);
     const seatedPlayers = players.filter(p => p.status === 'seated');
     const readyPlayers = players.filter(p => p.status === 'ready');
+    const minPlayers = this.getMinPlayers(roomCode);
 
-    // Must have at least 2 ready players, and no one still seated (not yet ready)
-    return readyPlayers.length >= 2 && seatedPlayers.length === 0;
+    return readyPlayers.length >= minPlayers && seatedPlayers.length === 0;
+  }
+
+  getMaxSeats(roomCode: string): number {
+    const room = this.rooms.get(roomCode);
+    return GAME_TYPE_MAX_SEATS[room?.gameType ?? DEFAULT_GAME_TYPE];
+  }
+
+  getMinPlayers(roomCode: string): number {
+    const room = this.rooms.get(roomCode);
+    return GAME_TYPE_MIN_PLAYERS[room?.gameType ?? DEFAULT_GAME_TYPE];
   }
 
   rebuy(roomCode: string, userId: string, amount: number): boolean {

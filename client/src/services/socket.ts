@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { SOCKET_EVENTS } from '../../../shared/constants/socket.constants';
 import type { Card, GameState, PlayerAction } from '../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../shared/types/room.types';
+import type { CatchMidGameState, CatchMidRoundResult } from '../../../shared/types/catch-mid.types';
 import { useUserStore } from '../stores/user';
 
 interface RoomUpdatePayload {
@@ -11,6 +12,8 @@ interface RoomUpdatePayload {
 interface UserEventPayload {
   userId: string;
   reason?: 'leave' | 'disconnect' | 'timeout';
+  nickname?: string;
+  chips?: number;
   reconnected?: boolean;
   reconnecting?: boolean;
   remainingMs?: number;
@@ -116,6 +119,22 @@ class SocketService {
     this.socket?.emit(SOCKET_EVENTS.PLAYER_ACTION, { roomCode, action, amount });
   }
 
+  catchMidSelectCards(roomCode: string, cardIds: string[]): void {
+    this.socket?.emit(SOCKET_EVENTS.CATCH_MID_SELECT_CARDS, { roomCode, cardIds });
+  }
+
+  catchMidConfirmCards(roomCode: string): void {
+    this.socket?.emit(SOCKET_EVENTS.CATCH_MID_CONFIRM_CARDS, { roomCode });
+  }
+
+  catchMidConfirmReveal(roomCode: string): void {
+    this.socket?.emit(SOCKET_EVENTS.CATCH_MID_CONFIRM_REVEAL, { roomCode });
+  }
+
+  catchMidAdvanceRound(roomCode: string): void {
+    this.socket?.emit(SOCKET_EVENTS.CATCH_MID_ADVANCE_ROUND, { roomCode });
+  }
+
   sendEmoji(roomCode: string, emoji: string): void {
     this.socket?.emit(SOCKET_EVENTS.SEND_EMOJI, { roomCode, emoji });
   }
@@ -138,6 +157,28 @@ class SocketService {
 
   onGameUpdate(callback: (data: GameState) => void): void {
     this.socket?.on(SOCKET_EVENTS.GAME_UPDATE, callback);
+  }
+
+  onCatchMidGameStart(callback: (data: { gameState: CatchMidGameState }) => void): void {
+    this.socket?.on(SOCKET_EVENTS.CATCH_MID_GAME_START, callback);
+  }
+
+  onCatchMidGameUpdate(callback: (data: CatchMidGameState) => void): void {
+    this.socket?.on(SOCKET_EVENTS.CATCH_MID_GAME_UPDATE, callback);
+  }
+
+  onCatchMidRoundResult(callback: (data: CatchMidRoundResult) => void): void {
+    this.socket?.on(SOCKET_EVENTS.CATCH_MID_ROUND_RESULT, callback);
+  }
+
+  onCatchMidGameOver(callback: (data: {
+    phase: CatchMidGameState['phase'];
+    eliminatedPlayerIds: string[];
+    canStartNextHand: boolean;
+    finalRanking: string[];
+    gameState?: CatchMidGameState;
+  }) => void): void {
+    this.socket?.on(SOCKET_EVENTS.CATCH_MID_GAME_OVER, callback);
   }
 
   onPlayerJoined(callback: (data: UserEventPayload) => void): void {

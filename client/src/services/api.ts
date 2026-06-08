@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { GameType, RoomPlayer } from '../../../shared/types/room.types';
 
 // 环境变量未定义时使用默认值
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
@@ -12,6 +13,7 @@ export interface CreateRoomResponse {
   roomCode: string;
   roomId: string;
   userId: string;
+  gameType: GameType;
   actionTimeoutEnabled: boolean;
 }
 
@@ -26,25 +28,26 @@ export interface RoomInfo {
     id: string;
     roomCode: string;
     hostId: string;
+    gameType: GameType;
     status: string;
     initialChips: number;
     actionTimeoutEnabled: boolean;
   };
-  players: Array<{
-    userId: string;
-    nickname: string;
-    seatNumber: number | null;
-    chips: number;
-    status: string;
-  }>;
+  players: RoomPlayer[];
 }
 
 export const roomApi = {
-  createRoom: (nickname: string, initialChips: number, password?: string, actionTimeoutEnabled = false) =>
-    api.post<CreateRoomResponse>('/rooms', { nickname, initialChips, password, actionTimeoutEnabled }),
+  createRoom: (
+    nickname: string,
+    initialChips: number,
+    password?: string,
+    actionTimeoutEnabled = false,
+    gameType: GameType = 'texas-holdem'
+  ) =>
+    api.post<CreateRoomResponse>('/rooms', { nickname, initialChips, password, actionTimeoutEnabled, gameType }),
 
-  joinRoom: (roomCode: string, nickname: string, chips: number, password?: string) =>
-    api.post<JoinRoomResponse>(`/rooms/${roomCode}/join`, { nickname, chips, password }),
+  joinRoom: (roomCode: string, nickname: string, password?: string) =>
+    api.post<JoinRoomResponse>(`/rooms/${roomCode}/join`, { nickname, password }),
 
   getRoomInfo: (roomCode: string) =>
     api.get<RoomInfo>(`/rooms/${roomCode}`),

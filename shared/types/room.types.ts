@@ -4,11 +4,15 @@ export type RoomStatus = 'waiting' | 'playing' | 'ended';
 // 玩家状态
 export type PlayerStatus = 'joined' | 'seated' | 'ready' | 'playing' | 'folded' | 'out';
 
+// 游戏类型
+export type GameType = 'texas-holdem' | 'catch-mid';
+
 // 房间信息
 export interface Room {
   id: string;
   roomCode: string;
   hostId: string;
+  gameType: GameType;
   status: RoomStatus;
   smallBlind: number;
   bigBlind: number;
@@ -35,6 +39,7 @@ export interface RoomPlayer {
 export interface CreateRoomRequest {
   nickname: string;
   initialChips: number;
+  gameType?: GameType;
   actionTimeoutEnabled?: boolean;
   password?: string;
 }
@@ -43,7 +48,6 @@ export interface CreateRoomRequest {
 export interface JoinRoomRequest {
   roomCode: string;
   nickname: string;
-  chips: number;
   password?: string;
 }
 

@@ -14,12 +14,17 @@
       </div>
     </header>
 
+    <div v-if="!isRoomInfoLoaded" class="room-loading">
+      <div class="loading-title">正在同步房间座位</div>
+      <div class="loading-meta">请稍候...</div>
+    </div>
+
     <!-- Seat Selection (when player hasn't selected a seat) -->
     <SeatSelection
-      v-if="mySeatNumber === null"
+      v-else-if="roomStore.gameType === 'texas-holdem' && mySeatNumber === null"
       :players="players"
       :user-id="userId"
-      :max-seats="10"
+      :max-seats="roomStore.maxSeats"
       @select="handleSelectSeat"
     />
 
@@ -27,6 +32,7 @@
     <div v-else class="game-layout">
       <main class="table-zone">
         <GameTable
+          v-if="roomStore.gameType === 'texas-holdem'"
           :players="seatedPlayers"
           :community-cards="communityCards"
           :pot="pot"
@@ -48,11 +54,21 @@
           @tip="handleTip"
           @reveal-cards="handleRevealCards"
         />
+        <CatchMidTable
+          v-else
+          :state="catchMidState"
+          :players="players"
+          :user-id="userId"
+          :active-emojis="activeEmojis"
+          @confirm-cards="handleCatchMidConfirmCards"
+          @confirm-reveal="handleCatchMidConfirmReveal"
+          @advance-round="handleCatchMidAdvanceRound"
+        />
       </main>
 
       <aside class="control-zone">
         <ActionPanel
-          v-if="isMyTurn"
+          v-if="roomStore.gameType === 'texas-holdem' && isMyTurn"
           :is-my-turn="isMyTurn"
           :current-bet="currentBet"
           :my-bet="myBet"
@@ -69,6 +85,8 @@
         <Scoreboard
           :players="players"
           :game-state="gameStore.gameState"
+          :catch-mid-state="catchMidState"
+          :game-type="roomStore.gameType"
           :left-players="leftPlayers"
           :is-emoji-cooldown="isCooldown"
           @send-emoji="handleEmoji"
@@ -105,8 +123,10 @@ import { ACTION_TIMEOUT } from '../../../shared/constants/game.constants';
 import { evaluateBestHand } from '../utils/handEvaluator';
 import type { GamePlayer, Card, GameState } from '../../../shared/types/game.types';
 import type { RoomPlayer } from '../../../shared/types/room.types';
+import type { CatchMidGameState } from '../../../shared/types/catch-mid.types';
 import GameTable from '../components/game/GameTable.vue';
 import type { TablePlayer } from '../components/game/GameTable.vue';
+import CatchMidTable from '../components/game/CatchMidTable.vue';
 import ActionPanel from '../components/game/ActionPanel.vue';
 import Scoreboard from '../components/game/Scoreboard.vue';
 import SeatSelection from '../components/game/SeatSelection.vue';
@@ -258,6 +278,7 @@ let emojiIdCounter = 0;
 const activeEmojis = ref<ActiveEmoji[]>([]);
 const countdownValue = ref<number | null>(null);
 const actionRemainingSeconds = ref<number | null>(null);
+const isRoomInfoLoaded = ref(false);
 let actionCountdownTimer: ReturnType<typeof setInterval> | null = null;
 
 // 断线重连状态
@@ -273,6 +294,8 @@ let pendingActionSync = false;
 const disconnectedPlayers = ref<Set<string>>(new Set());
 // 已离开玩家列表（用于比分板显示）
 const leftPlayers = ref<{ userId: string; nickname: string; chips: number }[]>([]);
+const catchMidState = ref<CatchMidGameState | null>(null);
+const lastCatchMidRoundKey = ref('');
 
 const activeActionKey = computed(() => {
   if (!actionTimeoutEnabled.value) return null;
@@ -289,7 +312,16 @@ const activeActionKey = computed(() => {
 onMounted(async () => {
   try {
     const response = await roomApi.getRoomInfo(roomCode.value);
-    roomStore.setActionTimeoutEnabled(response.data.room.actionTimeoutEnabled ?? false);
+    roomStore.setRoom(
+      response.data.room.roomCode,
+      response.data.room.id,
+      response.data.room.initialChips,
+      response.data.room.actionTimeoutEnabled ?? false,
+      response.data.room.gameType,
+      response.data.room.hostId
+    );
+    roomStore.setPlayers(response.data.players);
+    isRoomInfoLoaded.value = true;
   } catch (error) {
     console.error('Failed to get room info:', error);
   }
@@ -303,6 +335,7 @@ onMounted(async () => {
 
   socketService.onRoomUpdate((data) => {
     roomStore.setPlayers(data.players);
+    isRoomInfoLoaded.value = true;
   });
 
   socketService.onCountdownStart((data) => {
@@ -336,6 +369,9 @@ onMounted(async () => {
           break;
         case 'raise':
           soundManager.playRaise();
+          break;
+        case 'check':
+          soundManager.playKnock();
           break;
         case 'all_in':
           soundManager.playAllIn();
@@ -448,6 +484,16 @@ onMounted(async () => {
           });
         }
       }
+      if (data.nickname != null && data.chips != null) {
+        leftPlayers.value = [
+          ...leftPlayers.value.filter(player => player.userId !== data.userId),
+          {
+            userId: data.userId,
+            nickname: data.nickname,
+            chips: data.chips,
+          },
+        ];
+      }
     }
   });
 
@@ -470,6 +516,51 @@ onMounted(async () => {
     soundManager.stopGameStart();
     disconnectedPlayers.value = new Set();
     leftPlayers.value = [];
+  });
+
+  socketService.onCatchMidGameStart((data) => {
+    catchMidState.value = data.gameState;
+    lastCatchMidRoundKey.value = `${data.gameState.id}:${data.gameState.round}:${data.gameState.phase}`;
+    countdownValue.value = null;
+    soundManager.stopGameStart();
+  });
+
+  socketService.onCatchMidGameUpdate((data) => {
+    const previousState = catchMidState.value;
+    catchMidState.value = data;
+    const currentRoundKey = `${data.id}:${data.round}:${data.phase}`;
+    if (
+      previousState?.phase === 'round_result'
+      && data.phase === 'selecting'
+      && data.round >= 2
+      && data.round <= 4
+      && lastCatchMidRoundKey.value !== currentRoundKey
+    ) {
+      soundManager.playDeal();
+    }
+    lastCatchMidRoundKey.value = currentRoundKey;
+    countdownValue.value = null;
+  });
+
+  socketService.onCatchMidRoundResult(() => {
+    soundManager.playWin();
+    soundManager.playBet();
+  });
+
+  socketService.onCatchMidGameOver((data) => {
+    catchMidState.value = data.gameState ?? null;
+    const eliminated = data.eliminatedPlayerIds;
+    if (eliminated.includes(userId.value)) {
+      alert('您的筹码已耗尽，无法继续游戏');
+      userStore.clearUser();
+      roomStore.clearRoom();
+      gameStore.clearGame();
+      router.push('/');
+      return;
+    }
+    if (data.phase === 'game_draw') {
+      alert('本局平局，所有玩家均已出局');
+    }
   });
 
   socketService.onGameOver((data) => {
@@ -582,7 +673,7 @@ watch(activeActionKey, (key) => {
 });
 
 // 监控玩家数量变化：倒计时期间有人离开则停止音效
-watch(() => players.value.filter(p => p.seatNumber !== null).length, (newCount, oldCount) => {
+watch(() => players.value.length, (newCount, oldCount) => {
   if (newCount < oldCount && countdownValue.value != null) {
     console.log('[Sound] stopGameStart (players decreased during countdown)');
     soundManager.stopGameStart();
@@ -669,15 +760,35 @@ function handleRevealCards() {
   socketService.revealCards(roomCode.value);
 }
 
+function handleCatchMidConfirmCards(cardIds: string[]) {
+  soundManager.playButton();
+  socketService.catchMidSelectCards(roomCode.value, cardIds);
+  socketService.catchMidConfirmCards(roomCode.value);
+}
+
+function handleCatchMidConfirmReveal() {
+  soundManager.playButton();
+  socketService.catchMidConfirmReveal(roomCode.value);
+}
+
+function handleCatchMidAdvanceRound() {
+  soundManager.playButton();
+  socketService.catchMidAdvanceRound(roomCode.value);
+}
+
 // 用户主动离开房间（仅点击"离开"按钮时触发）
 function handleLeaveRoom() {
   // 根据玩家状态和游戏状态显示不同的确认文案
   const myStatus = players.value.find(p => p.userId === userId.value)?.status;
-  const isGameInProgress = gameStore.gameState?.status === 'playing';
+  const isTexasGameInProgress = gameStore.gameState?.status === 'playing';
+  const isCatchMidGameInProgress = catchMidState.value
+    && !['finished', 'game_draw', 'game_over'].includes(catchMidState.value.phase);
 
   let confirmMessage = '确定离开房间吗？';
-  if (isGameInProgress && myStatus === 'playing') {
+  if (isTexasGameInProgress && myStatus === 'playing') {
     confirmMessage = '正在游戏中，确定离开吗？已投入的筹码将不会退还';
+  } else if (isCatchMidGameInProgress && myStatus === 'playing') {
+    confirmMessage = '游戏中离开房间需要支付所有玩家5筹码，确认离开吗？';
   }
 
   if (!confirm(confirmMessage)) {
@@ -685,6 +796,7 @@ function handleLeaveRoom() {
   }
 
   // 播放离开音效并通知服务器广播给房间内其他成员
+  soundManager.stopGameStart();
   soundManager.playDoor();
   socketService.leaveRoom(roomCode.value);
   userStore.clearUser();

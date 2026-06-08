@@ -1,3 +1,5 @@
+import type { GameType } from '../types/room.types';
+
 // 昵称规则
 export const NICKNAME_MIN_LENGTH = 1;
 export const NICKNAME_MAX_LENGTH = 5;
@@ -5,6 +7,7 @@ export const NICKNAME_REGEX = /^[一-龥a-zA-Z0-9]+$/;
 
 // 筹码档次
 export const CHIP_OPTIONS = [100, 200, 500] as const;
+export const CATCH_MID_CHIP_OPTIONS = [50, 100, 200] as const;
 export const DEFAULT_CHIPS = 100;
 
 // 盲注设置
@@ -34,6 +37,19 @@ export const PLAYER_ACTIONS = ['fold', 'check', 'call', 'bet', 'raise', 'all_in'
 
 // 座位数量
 export const MAX_SEATS = 10;
+export const CATCH_MID_MAX_SEATS = 4;
+export const TEXAS_HOLDEM_MIN_PLAYERS = 2;
+export const CATCH_MID_MIN_PLAYERS = 3;
+export const DEFAULT_GAME_TYPE: GameType = 'texas-holdem';
+export const GAME_TYPES: readonly GameType[] = ['texas-holdem', 'catch-mid'] as const;
+export const GAME_TYPE_MAX_SEATS: Record<GameType, number> = {
+  'texas-holdem': MAX_SEATS,
+  'catch-mid': CATCH_MID_MAX_SEATS,
+};
+export const GAME_TYPE_MIN_PLAYERS: Record<GameType, number> = {
+  'texas-holdem': TEXAS_HOLDEM_MIN_PLAYERS,
+  'catch-mid': CATCH_MID_MIN_PLAYERS,
+};
 
 // 操作超时时间（秒）
 export const ACTION_TIMEOUT = 60;

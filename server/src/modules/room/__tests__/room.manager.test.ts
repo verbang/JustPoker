@@ -1,4 +1,4 @@
-import { RoomManager } from '../room.manager';
+﻿import { RoomManager } from '../room.manager';
 
 describe('RoomManager', () => {
   let manager: RoomManager;
@@ -22,6 +22,18 @@ describe('RoomManager', () => {
     expect(room.roomCode).toMatch(/^\d{2}$/);
     expect(room.hostId).toBe('host1');
     expect(room.initialChips).toBe(100);
+    expect(room.gameType).toBe('texas-holdem');
+  });
+
+  test('应创建 Catch Mid 房间并取消选座', () => {
+    const room = manager.createRoom('host1', 'Host', 100, undefined, false, 'catch-mid');
+    if (!room) throw new Error('测试房间创建失败');
+
+    expect(room.gameType).toBe('catch-mid');
+    expect(manager.getMaxSeats(room.roomCode)).toBe(4);
+    const host = manager.getRoomPlayers(room.roomCode).find(player => player.userId === 'host1');
+    expect(host?.seatNumber).toBeNull();
+    expect(manager.selectSeat(room.roomCode, 'host1', 1)).toBe(false);
   });
 
   test('should generate unique room codes', () => {
@@ -32,20 +44,38 @@ describe('RoomManager', () => {
 
   test('should join a room', () => {
     const room = createTestRoom();
-    const player = manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    const player = manager.joinRoom(room.roomCode, 'user1', 'Player1');
     expect(player).toBeDefined();
     expect(player?.nickname).toBe('Player1');
     expect(player?.status).toBe('joined');
+    expect(player?.chips).toBe(room.initialChips);
+  });
+
+  test('加入房间应使用房主设置的初始筹码', () => {
+    const room = manager.createRoom('host1', 'Host', 200);
+    if (!room) throw new Error('测试房间创建失败');
+
+    const player = manager.joinRoom(room.roomCode, 'user1', 'Player1');
+    expect(player?.chips).toBe(200);
+  });
+
+  test('Catch Mid 玩家加入后应直接进入未准备状态', () => {
+    const room = manager.createRoom('host1', 'Host', 100, undefined, false, 'catch-mid');
+    if (!room) throw new Error('测试房间创建失败');
+
+    const player = manager.joinRoom(room.roomCode, 'user1', 'Player1');
+    expect(player?.seatNumber).toBeNull();
+    expect(player?.status).toBe('seated');
   });
 
   test('should return null for invalid room code', () => {
-    const player = manager.joinRoom('99', 'user1', 'Player1', 100);
+    const player = manager.joinRoom('99', 'user1', 'Player1');
     expect(player).toBeNull();
   });
 
   test('should reject duplicate nickname in the same room', () => {
     const room = createTestRoom();
-    const player = manager.joinRoom(room.roomCode, 'user1', 'Host', 100);
+    const player = manager.joinRoom(room.roomCode, 'user1', 'Host');
 
     expect(player).toBeNull();
     expect(manager.hasNickname(room.roomCode, 'Host')).toBe(true);
@@ -74,7 +104,7 @@ describe('RoomManager', () => {
 
   test('should select a seat', () => {
     const room = createTestRoom();
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     // Seat 1 is taken by host, select seat 2
     const result = manager.selectSeat(room.roomCode, 'user1', 2);
     expect(result).toBe(true);
@@ -83,8 +113,8 @@ describe('RoomManager', () => {
   test('should not select occupied seat', () => {
     const room = createTestRoom();
     // Host is auto-seated at seat 1
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
-    manager.joinRoom(room.roomCode, 'user2', 'Player2', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
+    manager.joinRoom(room.roomCode, 'user2', 'Player2');
     manager.selectSeat(room.roomCode, 'user1', 2);
     // Seat 2 is now occupied by user1
     const result = manager.selectSeat(room.roomCode, 'user2', 2);
@@ -94,14 +124,14 @@ describe('RoomManager', () => {
   test('should reject invalid seat number', () => {
     const room = createTestRoom();
 
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     expect(manager.selectSeat(room.roomCode, 'user1', 0)).toBe(false);
     expect(manager.selectSeat(room.roomCode, 'user1', 11)).toBe(false);
   });
 
   test('should leave a room', () => {
     const room = createTestRoom();
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     manager.selectSeat(room.roomCode, 'user1', 1);
     const result = manager.leaveRoom(room.roomCode, 'user1');
     expect(result).toBe(true);
@@ -109,15 +139,15 @@ describe('RoomManager', () => {
 
   test('should get room players', () => {
     const room = createTestRoom();
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
-    manager.joinRoom(room.roomCode, 'user2', 'Player2', 200);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
+    manager.joinRoom(room.roomCode, 'user2', 'Player2');
     const players = manager.getRoomPlayers(room.roomCode);
     expect(players).toHaveLength(3); // host + 2 joined players
   });
 
   test('should handle rebuy', () => {
     const room = createTestRoom();
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     manager.selectSeat(room.roomCode, 'user1', 1);
     const result = manager.rebuy(room.roomCode, 'user1', 200);
     expect(result).toBe(true);
@@ -126,14 +156,14 @@ describe('RoomManager', () => {
   test('should reject invalid rebuy amount', () => {
     const room = createTestRoom();
 
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     expect(manager.rebuy(room.roomCode, 'user1', 0)).toBe(false);
     expect(manager.rebuy(room.roomCode, 'user1', -100)).toBe(false);
   });
 
   test('should ready a seated player', () => {
     const room = createTestRoom();
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     manager.selectSeat(room.roomCode, 'user1', 2);
     const result = manager.readyPlayer(room.roomCode, 'user1');
     expect(result).toBe(true);
@@ -143,7 +173,7 @@ describe('RoomManager', () => {
 
   test('should not ready a non-seated player', () => {
     const room = createTestRoom();
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     // user1 is 'joined', not 'seated'
     const result = manager.readyPlayer(room.roomCode, 'user1');
     expect(result).toBe(false);
@@ -151,7 +181,7 @@ describe('RoomManager', () => {
 
   test('should detect when all seated players are ready', () => {
     const room = createTestRoom();
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     manager.selectSeat(room.roomCode, 'user1', 2);
 
     // Not ready yet
@@ -168,9 +198,34 @@ describe('RoomManager', () => {
     expect(manager.allSeatedPlayersReady(room.roomCode)).toBe(true);
   });
 
+  test('Catch Mid 房间至少需要 3 名已准备玩家', () => {
+    const room = manager.createRoom('host1', 'Host', 100, undefined, false, 'catch-mid');
+    if (!room) throw new Error('测试房间创建失败');
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
+    manager.joinRoom(room.roomCode, 'user2', 'Player2');
+
+    manager.readyPlayer(room.roomCode, 'host1');
+    manager.readyPlayer(room.roomCode, 'user1');
+    expect(manager.allSeatedPlayersReady(room.roomCode)).toBe(false);
+
+    manager.readyPlayer(room.roomCode, 'user2');
+    expect(manager.allSeatedPlayersReady(room.roomCode)).toBe(true);
+  });
+
+  test('Catch Mid 房间按人数判断满员且不能选座', () => {
+    const room = manager.createRoom('host1', 'Host', 100, undefined, false, 'catch-mid');
+    if (!room) throw new Error('测试房间创建失败');
+    for (let i = 1; i <= 3; i++) {
+      manager.joinRoom(room.roomCode, `user${i}`, `P${i}`);
+    }
+
+    expect(manager.isRoomFull(room.roomCode)).toBe(true);
+    expect(manager.selectSeat(room.roomCode, 'user1', 1)).toBe(false);
+  });
+
   test('should get seated and ready players', () => {
     const room = createTestRoom();
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     manager.selectSeat(room.roomCode, 'user1', 2);
     manager.readyPlayer(room.roomCode, 'host1');
     manager.readyPlayer(room.roomCode, 'user1');
@@ -191,8 +246,8 @@ describe('RoomManager', () => {
 
   test('should transfer host to next seat player', () => {
     const room = createTestRoom('host1', 'Host');
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
-    manager.joinRoom(room.roomCode, 'user2', 'Player2', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
+    manager.joinRoom(room.roomCode, 'user2', 'Player2');
     manager.selectSeat(room.roomCode, 'user1', 2);
     manager.selectSeat(room.roomCode, 'user2', 3);
 
@@ -207,7 +262,7 @@ describe('RoomManager', () => {
 
   test('should transfer host to smallest seat if no higher seat exists', () => {
     const room = createTestRoom('host1', 'Host');
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
     manager.selectSeat(room.roomCode, 'user1', 3);
 
     // Host is at seat 1, user1 is at seat 3
@@ -225,8 +280,8 @@ describe('RoomManager', () => {
 
   test('should reset all players to seated status', () => {
     const room = createTestRoom('host1', 'Host');
-    manager.joinRoom(room.roomCode, 'user1', 'Player1', 100);
-    manager.joinRoom(room.roomCode, 'user2', 'Player2', 100);
+    manager.joinRoom(room.roomCode, 'user1', 'Player1');
+    manager.joinRoom(room.roomCode, 'user2', 'Player2');
     manager.selectSeat(room.roomCode, 'user1', 2);
     manager.selectSeat(room.roomCode, 'user2', 3);
 
@@ -248,3 +303,4 @@ describe('RoomManager', () => {
     expect(players.filter(p => p.status === 'ready')).toHaveLength(0);
   });
 });
+

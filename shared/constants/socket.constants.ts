@@ -10,6 +10,10 @@ export const SOCKET_EVENTS = {
   REBUY: 'rebuy',
   TIP_PLAYER: 'tip-player',
   REVEAL_CARDS: 'reveal-cards',
+  CATCH_MID_SELECT_CARDS: 'catch-mid-select-cards',
+  CATCH_MID_CONFIRM_CARDS: 'catch-mid-confirm-cards',
+  CATCH_MID_CONFIRM_REVEAL: 'catch-mid-confirm-reveal',
+  CATCH_MID_ADVANCE_ROUND: 'catch-mid-advance-round',
 
   // 服务器 → 客户端
   ROOM_UPDATE: 'room-update',
@@ -25,4 +29,8 @@ export const SOCKET_EVENTS = {
   TIP_RECEIVED: 'tip-received',
   CARDS_REVEALED: 'cards-revealed',
   PLAY_SOUND: 'play-sound',
+  CATCH_MID_GAME_START: 'catch-mid-game-start',
+  CATCH_MID_GAME_UPDATE: 'catch-mid-game-update',
+  CATCH_MID_ROUND_RESULT: 'catch-mid-round-result',
+  CATCH_MID_GAME_OVER: 'catch-mid-game-over',
 } as const;

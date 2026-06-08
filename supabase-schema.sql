@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   room_code VARCHAR(10) UNIQUE NOT NULL,
   host_id VARCHAR(255) NOT NULL,
+  game_type VARCHAR(30) DEFAULT 'texas-holdem',
   status VARCHAR(20) DEFAULT 'waiting',
   small_blind INTEGER DEFAULT 5,
   big_blind INTEGER DEFAULT 10,

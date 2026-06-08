@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { roomService } from './room.service';
-import { CreateRoomRequest, JoinRoomRequest, Room } from '../../../../shared/types/room.types';
-import { NICKNAME_MIN_LENGTH, NICKNAME_MAX_LENGTH, NICKNAME_REGEX } from '../../../../shared/constants/game.constants';
+import { CreateRoomRequest, JoinRoomRequest, Room, GameType } from '../../../../shared/types/room.types';
+import { DEFAULT_GAME_TYPE, GAME_TYPES, NICKNAME_MIN_LENGTH, NICKNAME_MAX_LENGTH, NICKNAME_REGEX } from '../../../../shared/constants/game.constants';
 
 const router = Router();
 
@@ -20,10 +20,17 @@ function validateNickname(nickname: string): string | null {
   return null;
 }
 
+function normalizeGameType(gameType: unknown): GameType | null {
+  if (gameType === undefined || gameType === null || gameType === '') {
+    return DEFAULT_GAME_TYPE;
+  }
+  return GAME_TYPES.includes(gameType as GameType) ? gameType as GameType : null;
+}
+
 // Create room
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { nickname, initialChips, password, actionTimeoutEnabled }: CreateRoomRequest = req.body;
+    const { nickname, initialChips, password, actionTimeoutEnabled, gameType }: CreateRoomRequest = req.body;
 
     if (!nickname || !Number.isInteger(initialChips) || initialChips <= 0) {
       return res.status(400).json({ error: '缺少必填参数' });
@@ -38,11 +45,17 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '密码必须为4位数字' });
     }
 
+    const normalizedGameType = normalizeGameType(gameType);
+    if (!normalizedGameType) {
+      return res.status(400).json({ error: '游戏类型无效' });
+    }
+
     // Generate unique userId using uuid
     const userId = uuidv4();
     const room = await roomService.createRoom(userId, {
       nickname,
       initialChips,
+      gameType: normalizedGameType,
       password,
       actionTimeoutEnabled: actionTimeoutEnabled ?? false,
     });
@@ -54,6 +67,7 @@ router.post('/', async (req: Request, res: Response) => {
       roomCode: room.roomCode,
       roomId: room.id,
       userId,
+      gameType: room.gameType,
       actionTimeoutEnabled: room.actionTimeoutEnabled,
     });
   } catch (error) {
@@ -65,9 +79,9 @@ router.post('/', async (req: Request, res: Response) => {
 router.post('/:roomCode/join', async (req: Request, res: Response) => {
   try {
     const { roomCode } = req.params;
-    const { nickname, chips, password }: JoinRoomRequest = req.body;
+    const { nickname, password }: JoinRoomRequest = req.body;
 
-    if (!nickname || !Number.isInteger(chips) || chips <= 0) {
+    if (!nickname) {
       return res.status(400).json({ error: '缺少必填参数' });
     }
 
@@ -95,7 +109,7 @@ router.post('/:roomCode/join', async (req: Request, res: Response) => {
 
     // Generate unique userId for the joining player
     const userId = uuidv4();
-    const player = await roomService.joinRoom(roomCode, userId, nickname, chips, password);
+    const player = await roomService.joinRoom(roomCode, userId, nickname, password);
 
     if (!player) {
       return res.status(403).json({ error: '加入房间失败' });
@@ -128,6 +142,7 @@ router.get('/:roomCode', (req: Request, res: Response) => {
       id: room.id,
       roomCode: room.roomCode,
       hostId: room.hostId,
+      gameType: room.gameType,
       status: room.status,
       smallBlind: room.smallBlind,
       bigBlind: room.bigBlind,
