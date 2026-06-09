@@ -4,7 +4,6 @@ dist/
 .env.local
 client/.env
 client/.env.development
-client/.env.production
 server/.env
 *.log
 .DS_Store
