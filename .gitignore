@@ -19,8 +19,11 @@ service-manager.ps1
 switch-env.bat
 switch-env.ps1
 
-# 一次性清理脚本
-server/scripts/clean-shared-build-artifacts.js
+# AI 工具本地配置
+.claude/
+.codex/
+.superpowers/
+.codegraph/
 
-# Codegraph 本地配置
-.codegraph/.gitignore
+# 一次性清理脚本
+server/scripts/
