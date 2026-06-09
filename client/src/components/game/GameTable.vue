@@ -157,38 +157,164 @@ const mySeatOverlayStyle = computed(() => {
   return getSeatOverlayStyle(myDisplayIndex, displayPlayers.value.length);
 });
 
+interface SeatPosition {
+  left: number;
+  top: number;
+}
+
+function createSeatStyle(position: SeatPosition) {
+  return {
+    left: `${position.left}%`,
+    top: `${position.top}%`,
+    transform: 'translate(-50%, -50%) scale(var(--player-seat-scale, 1))',
+  };
+}
+
+function getArcSeatPosition(
+  order: number,
+  count: number,
+  startDeg: number,
+  endDeg: number,
+  radiusX: number,
+  radiusY: number,
+  centerX: number,
+  centerY: number,
+): SeatPosition {
+  const ratio = count <= 1 ? 0.5 : order / (count - 1);
+  const angle = (startDeg + (endDeg - startDeg) * ratio) * (Math.PI / 180);
+
+  return {
+    left: centerX + radiusX * Math.cos(angle),
+    top: centerY + radiusY * Math.sin(angle),
+  };
+}
+
+const portraitSeatPositions: Record<number, SeatPosition[]> = {
+  2: [
+    { left: 50, top: 17 },
+  ],
+  3: [
+    { left: 17, top: 37 },
+    { left: 83, top: 37 },
+  ],
+  4: [
+    { left: 16, top: 47 },
+    { left: 50, top: 17 },
+    { left: 84, top: 47 },
+  ],
+  5: [
+    { left: 16, top: 50 },
+    { left: 28, top: 23 },
+    { left: 72, top: 23 },
+    { left: 84, top: 50 },
+  ],
+  6: [
+    { left: 14, top: 55 },
+    { left: 20, top: 31 },
+    { left: 50, top: 17 },
+    { left: 80, top: 31 },
+    { left: 86, top: 55 },
+  ],
+  7: [
+    { left: 13, top: 58 },
+    { left: 17, top: 38 },
+    { left: 37, top: 19 },
+    { left: 63, top: 19 },
+    { left: 83, top: 38 },
+    { left: 87, top: 58 },
+  ],
+  8: [
+    { left: 13, top: 60 },
+    { left: 14, top: 42 },
+    { left: 29, top: 23 },
+    { left: 50, top: 16 },
+    { left: 71, top: 23 },
+    { left: 86, top: 42 },
+    { left: 87, top: 60 },
+  ],
+  9: [
+    { left: 13, top: 62 },
+    { left: 13, top: 47 },
+    { left: 22, top: 30 },
+    { left: 39, top: 19 },
+    { left: 61, top: 19 },
+    { left: 78, top: 30 },
+    { left: 87, top: 47 },
+    { left: 87, top: 62 },
+  ],
+  10: [
+    { left: 13, top: 63 },
+    { left: 13, top: 50 },
+    { left: 18, top: 36 },
+    { left: 31, top: 24 },
+    { left: 50, top: 17 },
+    { left: 69, top: 24 },
+    { left: 82, top: 36 },
+    { left: 87, top: 50 },
+    { left: 87, top: 63 },
+  ],
+  11: [
+    { left: 13, top: 64 },
+    { left: 13, top: 52 },
+    { left: 16, top: 39 },
+    { left: 27, top: 27 },
+    { left: 41, top: 19 },
+    { left: 59, top: 19 },
+    { left: 73, top: 27 },
+    { left: 84, top: 39 },
+    { left: 87, top: 52 },
+    { left: 87, top: 64 },
+  ],
+  12: [
+    { left: 13, top: 65 },
+    { left: 13, top: 54 },
+    { left: 14, top: 42 },
+    { left: 22, top: 31 },
+    { left: 35, top: 22 },
+    { left: 50, top: 17 },
+    { left: 65, top: 22 },
+    { left: 78, top: 31 },
+    { left: 86, top: 42 },
+    { left: 87, top: 54 },
+    { left: 87, top: 65 },
+  ],
+};
+
 /**
- * Position seats in a first-person oval layout.
- * Index 0 (me) = bottom center (6 o'clock).
- * Others spread clockwise: left-bottom, left, left-top, top, right-top, right, right-bottom.
+ * 第一人称牌桌座位布局。
+ * displayIndex 0（自己）固定在底部，其余座位从左侧到右侧顺时针排列。
  */
 function getSeatStyle(displayIndex: number, total: number) {
   if (total <= 1) {
-    return { left: '50%', top: 'var(--my-seat-top)', transform: 'translate(-50%, -50%)' };
+    return {
+      left: '50%',
+      top: 'var(--my-seat-top)',
+      transform: 'translate(-50%, -50%) scale(var(--player-seat-scale, 1))',
+      '--player-seat-scale': 'var(--seat-scale)',
+    };
   }
 
   // Me (index 0) is always at bottom center
   if (displayIndex === 0) {
-    return { left: '50%', top: 'var(--my-seat-top)', transform: 'translate(-50%, -50%)' };
+    return {
+      left: '50%',
+      top: 'var(--my-seat-top)',
+      transform: 'translate(-50%, -50%) scale(var(--player-seat-scale, 1))',
+      '--player-seat-scale': 'var(--seat-scale)',
+    };
   }
 
-  // Other players spread along the top arc (from left to right)
   const otherCount = total - 1;
-  // Spread from -70° to +70° around the top (12 o'clock = -90° in standard math)
-  const spreadAngle = 150; // degrees total spread
-  const startAngle = -90 - spreadAngle / 2; // left side
-  const stepAngle = spreadAngle / (otherCount - 1 || 1);
-  const angle = (startAngle + stepAngle * (displayIndex - 1)) * (Math.PI / 180);
+  const order = displayIndex - 1;
 
-  const radiusX = 44;
-  const radiusY = 40;
-  const x = 50 + radiusX * Math.cos(angle);
-  const y = 50 + radiusY * Math.sin(angle);
+  const portraitPosition = portraitSeatPositions[total]?.[order];
+  const desktopPosition = getArcSeatPosition(order, otherCount, 205, 335, 45, 40, 50, 52);
 
   return {
-    left: `${x}%`,
-    top: `${y}%`,
-    transform: 'translate(-50%, -50%)',
+    ...createSeatStyle(desktopPosition),
+    '--player-seat-scale': 'var(--other-seat-scale)',
+    '--portrait-left': `${portraitPosition?.left ?? desktopPosition.left}%`,
+    '--portrait-top': `${portraitPosition?.top ?? desktopPosition.top}%`,
   };
 }
 
@@ -211,6 +337,12 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   margin: 0 auto;
   --my-seat-top: 88%;
   --my-seat-overlay-offset: 86px;
+  --seat-scale: 1;
+  --other-seat-scale: 1;
+}
+
+.game-table:has(.player-seat:nth-child(9)) {
+  --other-seat-scale: 0.88;
 }
 
 .table-surface {
@@ -314,6 +446,8 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
     margin: 0;
     --my-seat-top: 78%;
     --my-seat-overlay-offset: 48px;
+    --seat-scale: 0.88;
+    --other-seat-scale: 0.78;
   }
 
   .table-surface {
@@ -346,11 +480,53 @@ function getSeatOverlayStyle(displayIndex: number, total: number) {
   .game-table {
     --my-seat-top: 76%;
     --my-seat-overlay-offset: 40px;
+    --seat-scale: 0.82;
+    --other-seat-scale: 0.72;
   }
 
   .table-surface {
     width: 46%;
     height: 34%;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 700px) {
+  .game-table {
+    min-height: 610px;
+    --my-seat-top: 88%;
+    --my-seat-overlay-offset: 64px;
+    --seat-scale: 0.9;
+    --other-seat-scale: 0.82;
+  }
+
+  .table-surface {
+    top: 48%;
+    width: 68%;
+    height: 30%;
+    border-width: 6px;
+  }
+
+  .game-table :deep(.player-seat) {
+    left: var(--portrait-left) !important;
+    top: var(--portrait-top) !important;
+  }
+
+  .game-table :deep(.player-seat.is-me) {
+    left: 50% !important;
+    top: var(--my-seat-top) !important;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 420px) {
+  .game-table {
+    min-height: 600px;
+    --seat-scale: 0.86;
+    --other-seat-scale: 0.76;
+  }
+
+  .table-surface {
+    width: 72%;
+    height: 29%;
   }
 }
 </style>

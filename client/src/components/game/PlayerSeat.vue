@@ -532,4 +532,137 @@ function handleTip() {
     padding: 1px 6px;
   }
 }
+
+@media (orientation: portrait) and (max-width: 700px) {
+  .player-seat {
+    gap: 2px;
+    min-width: 72px;
+    max-width: 88px;
+    padding: 5px 8px;
+    border-radius: 8px;
+  }
+
+  .player-seat.is-me,
+  .player-seat.is-current,
+  .player-seat.is-showdown-winner {
+    border-width: 2px;
+  }
+
+  .action-ring {
+    inset: -5px;
+    border-radius: 10px;
+  }
+
+  .action-ring::after {
+    inset: 4px;
+    border-radius: 7px;
+  }
+
+  .position-badges {
+    gap: 2px;
+    min-height: 11px;
+    margin-bottom: 0;
+  }
+
+  .badge {
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+
+  .player-info {
+    gap: 1px;
+  }
+
+  .nickname {
+    max-width: 80px;
+    font-size: 14px;
+  }
+
+  .action-countdown {
+    top: -21px;
+    min-width: 24px;
+    padding: 1px 5px;
+    font-size: 12px;
+  }
+
+  .chips {
+    font-size: 12px;
+  }
+
+  .cards {
+    gap: 2px;
+    margin-top: 1px;
+  }
+
+  .card {
+    width: 24px;
+    height: 34px;
+    border-radius: 4px;
+  }
+
+  .card-rank {
+    font-size: 10px;
+  }
+
+  .card-suit {
+    font-size: 9px;
+  }
+
+  .player-seat.is-me {
+    min-width: 76px;
+    padding: 6px 8px;
+  }
+
+  .player-seat.is-me .card {
+    width: 28px;
+    height: 40px;
+    border-radius: 5px;
+  }
+
+  .player-seat.is-me .card-rank {
+    font-size: 12px;
+  }
+
+  .player-seat.is-me .card-suit {
+    font-size: 10px;
+  }
+
+  .emoji-container {
+    top: -28px;
+  }
+
+  .floating-emoji {
+    font-size: 22px;
+  }
+
+  .crown-container {
+    top: -22px;
+  }
+
+  .crown {
+    font-size: 22px;
+  }
+
+  .showdown-hand-badge {
+    font-size: 9px;
+    padding: 1px 6px;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 420px) {
+  .player-seat {
+    min-width: 68px;
+    padding-inline: 6px;
+  }
+
+  .nickname {
+    max-width: 76px;
+    font-size: 13px;
+  }
+
+  .card {
+    width: 23px;
+    height: 32px;
+  }
+}
 </style>
