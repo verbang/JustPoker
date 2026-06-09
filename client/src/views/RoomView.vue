@@ -33,12 +33,12 @@
       <main class="table-zone">
         <GameTable
           v-if="roomStore.gameType === 'texas-holdem'"
-          :players="seatedPlayers"
+          :players="tablePlayers"
           :community-cards="communityCards"
           :pot="pot"
           :main-pot-amount="mainPotAmount"
           :side-pots="sidePots"
-          :current-player-index="currentPlayerIndex"
+          :current-player-id="currentPlayerId"
           :user-id="userId"
           :my-cards="myCards"
           :winner-id="winnerId"
@@ -179,6 +179,33 @@ const seatedPlayers = computed(() => {
   }));
 });
 
+const tablePlayers = computed<TablePlayer[]>(() => {
+  const state = gameStore.gameState;
+  if (state?.status === 'playing') {
+    return state.players
+      .slice()
+      .sort((a, b) => a.seatNumber - b.seatNumber)
+      .map(player => {
+        const roomPlayer = players.value.find(p => p.userId === player.userId);
+        return {
+          id: roomPlayer?.id,
+          roomId: roomPlayer?.roomId,
+          userId: player.userId,
+          nickname: player.nickname,
+          seatNumber: player.seatNumber,
+          chips: player.chips,
+          status: player.status,
+          joinedAt: roomPlayer?.joinedAt,
+          isDealer: player.isDealer,
+          isSmallBlind: player.isSmallBlind,
+          isBigBlind: player.isBigBlind,
+        };
+      });
+  }
+
+  return seatedPlayers.value;
+});
+
 const lastWinnerIds = ref<string[]>([]);
 const lastGameState = ref<GameState | null>(null);
 
@@ -256,10 +283,10 @@ const mainPotAmount = computed(() => {
   const sidePotsTotal = sp.reduce((sum, s) => sum + s.amount, 0);
   return pot.value - sidePotsTotal;
 });
-const currentPlayerIndex = computed(() => {
+const currentPlayerId = computed(() => {
   const state = gameStore.gameState;
-  if (!state || state.status !== 'playing') return -1;
-  return state.currentPlayerIndex;
+  if (!state || state.status !== 'playing') return null;
+  return state.currentPlayerId ?? state.players[state.currentPlayerIndex]?.userId ?? null;
 });
 const currentBet = computed(() => gameStore.gameState?.currentBet || 0);
 const minRaise = computed(() => gameStore.gameState?.minRaise || 10);
@@ -306,7 +333,8 @@ const activeActionKey = computed(() => {
   const currentPlayer = state.players[state.currentPlayerIndex];
   if (!currentPlayer || currentPlayer.status !== 'playing') return null;
 
-  return `${state.id}:${state.phase}:${state.currentPlayerIndex}:${currentPlayer.userId}:${state.currentBet}:${currentPlayer.bet}`;
+  const activePlayerId = state.currentPlayerId ?? currentPlayer.userId;
+  return `${state.id}:${state.phase}:${activePlayerId}:${state.currentBet}:${currentPlayer.bet}`;
 });
 
 onMounted(async () => {
@@ -460,7 +488,7 @@ onMounted(async () => {
       if (state && state.status === 'playing') {
         const currentPlayer = state.players[state.currentPlayerIndex];
         if (currentPlayer?.userId === data.userId) {
-          stopActionCountdown();
+          stopActionCountdown(false);
           // 用服务端发送的剩余时间更新显示（不启动计时器）
           if (data.remainingMs != null) {
             actionRemainingSeconds.value = Math.ceil(data.remainingMs / 1000);
@@ -689,11 +717,14 @@ function startActionCountdown(remainingSeconds: number) {
   }, 1000);
 }
 
-function stopActionCountdown() {
-  if (!actionCountdownTimer) return;
-
-  clearInterval(actionCountdownTimer);
-  actionCountdownTimer = null;
+function stopActionCountdown(clearRemaining = true) {
+  if (actionCountdownTimer) {
+    clearInterval(actionCountdownTimer);
+    actionCountdownTimer = null;
+  }
+  if (clearRemaining) {
+    actionRemainingSeconds.value = null;
+  }
 }
 
 function handleSelectSeat(seatNumber: number) {

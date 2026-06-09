@@ -18,8 +18,9 @@ export const useGameStore = defineStore('game', () => {
   const isMyTurn = computed(() => {
     if (!gameState.value || !userStore.userId) return false;
     if (gameState.value.status !== 'playing') return false;
-    const myIndex = gameState.value.players.findIndex(p => p.userId === userStore.userId);
-    return myIndex === gameState.value.currentPlayerIndex;
+    const currentPlayerId = gameState.value.currentPlayerId
+      ?? gameState.value.players[gameState.value.currentPlayerIndex]?.userId;
+    return currentPlayerId === userStore.userId;
   });
 
   const myPlayer = computed(() => {

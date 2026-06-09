@@ -41,6 +41,12 @@ class SocketService {
   // 已完成的亮牌数据，用于重连玩家回放
   private completedReveals: Map<string, { userId: string; cards: Card[] }> = new Map();
 
+  private withCurrentPlayerId(gameState: GameState): GameState {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const currentPlayerId = gameState.status === 'playing' ? currentPlayer?.userId : undefined;
+    return { ...gameState, currentPlayerId };
+  }
+
   initialize(httpServer: HttpServer): void {
     const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173')
       .split(',')
@@ -100,7 +106,7 @@ class SocketService {
             }
             // 所有重连玩家都发送带剩余时间的游戏状态
             const syncRemainingMs = this.getActionRemainingMs(data.roomCode);
-            this.emitToSocket(socket.id, SOCKET_EVENTS.GAME_UPDATE, { ...gameState, actionRemainingMs: syncRemainingMs });
+            this.emitToSocket(socket.id, SOCKET_EVENTS.GAME_UPDATE, { ...this.withCurrentPlayerId(gameState), actionRemainingMs: syncRemainingMs });
 
             // 广播重连成功事件给房间所有人（携带剩余时间）
             const joinPayload: Record<string, unknown> = { userId: data.userId, reconnected: true };
@@ -109,7 +115,7 @@ class SocketService {
             }
             this.emitToRoom(data.roomCode, SOCKET_EVENTS.PLAYER_JOINED, joinPayload);
           } else {
-            this.emitToSocket(socket.id, SOCKET_EVENTS.GAME_UPDATE, gameState);
+            this.emitToSocket(socket.id, SOCKET_EVENTS.GAME_UPDATE, this.withCurrentPlayerId(gameState));
           }
         }
 
@@ -194,7 +200,7 @@ class SocketService {
                   this.scheduleActionTimeout(roomCode, newState);
                 }
 
-                this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, newState);
+                this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, this.withCurrentPlayerId(newState));
               }
             } catch (error) {
               logger.error(`玩家 ${userId} 离开时弃牌失败: ${error}`);
@@ -574,8 +580,9 @@ class SocketService {
     });
 
     logger.info(`Game started in room ${roomCode} with ${readyPlayers.length} players`);
-    this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_START, { gameState });
-    this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, gameState);
+    const publicGameState = this.withCurrentPlayerId(gameState);
+    this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_START, { gameState: publicGameState });
+    this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, publicGameState);
     this.scheduleActionTimeout(roomCode, gameState);
   }
 
@@ -602,7 +609,7 @@ class SocketService {
       this.gameStates.set(roomCode, newState);
 
       // Broadcast updated game state
-      this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, newState);
+      this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, this.withCurrentPlayerId(newState));
 
       // Check if game finished
       if (newState.status === 'finished') {
@@ -1107,7 +1114,7 @@ class SocketService {
     try {
       const newState = engine.playerAction(currentState, userId, action);
       this.gameStates.set(roomCode, newState);
-      this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, newState);
+      this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, this.withCurrentPlayerId(newState));
 
       if (newState.status === 'finished') {
         this.handleGameFinished(roomCode, newState);
@@ -1160,7 +1167,7 @@ class SocketService {
           if (engine) {
             const newState = engine.forceFold(gameState, userId);
             this.gameStates.set(roomCode, newState);
-            this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, newState);
+            this.emitToRoom(roomCode, SOCKET_EVENTS.GAME_UPDATE, this.withCurrentPlayerId(newState));
 
             if (newState.status === 'finished') {
               this.handleGameFinished(roomCode, newState);

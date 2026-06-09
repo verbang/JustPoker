@@ -24,12 +24,12 @@
         :key="player.userId"
         :player="player"
         :is-me="player.userId === userId"
-        :is-current-player="player.seatNumber === currentSeatNumber"
+        :is-current-player="player.userId === currentPlayerId"
         :is-winner="winnerIds.includes(player.userId)"
         :disconnected="disconnectedPlayerIds?.has(player.userId) ?? false"
         :my-cards="getPlayerCards(player)"
         :emojis="getPlayerEmojis(player.userId)"
-        :action-remaining-seconds="player.seatNumber === currentSeatNumber ? actionRemainingSeconds : null"
+        :action-remaining-seconds="player.userId === currentPlayerId ? actionRemainingSeconds : null"
         :is-showdown-revealed="showdownMode && showdownPlayers?.has(player.userId) === true"
         :is-showdown-winner="showdownMode && winnerIds.includes(player.userId)"
         :showdown-hand-description="showdownPlayers?.get(player.userId)?.handDescription ?? ''"
@@ -65,8 +65,15 @@ interface ShowdownPlayerData {
   handDescription: string;
 }
 
-export type TablePlayer = Omit<RoomPlayer, 'status'> & {
+export type TablePlayer = {
+  id?: string;
+  roomId?: string;
+  userId: string;
+  nickname: string;
+  seatNumber: number | null;
+  chips: number;
   status: RoomPlayer['status'] | GamePlayer['status'];
+  joinedAt?: Date;
   isDealer: boolean;
   isSmallBlind: boolean;
   isBigBlind: boolean;
@@ -78,7 +85,7 @@ const props = defineProps<{
   pot: number;
   mainPotAmount: number;
   sidePots: SidePot[];
-  currentPlayerIndex: number;
+  currentPlayerId?: string | null;
   userId: string;
   myCards: Card[];
   winnerId?: string;
@@ -120,20 +127,6 @@ function getPlayerCards(player: TablePlayer): Card[] {
  * 当前操作玩家的座位号
  * 需要将 currentPlayerIndex（原始数组索引）映射到 displayPlayers 中的显示位置
  */
-const currentSeatNumber = computed(() => {
-  if (props.currentPlayerIndex < 0 || props.currentPlayerIndex >= props.players.length) return -1;
-
-  // 获取当前玩家的 userId
-  const currentUserId = props.players[props.currentPlayerIndex]?.userId;
-  if (!currentUserId) return -1;
-
-  // 在 displayPlayers 中找到该玩家并返回其座位号
-  const displayIndex = displayPlayers.value.findIndex(p => p.userId === currentUserId);
-  if (displayIndex === -1) return -1;
-
-  return displayPlayers.value[displayIndex]?.seatNumber ?? -1;
-});
-
 /**
  * Reorder players so "me" is always first (display position = bottom).
  * Other players follow in clockwise seat-number order from my left.

@@ -44,6 +44,7 @@ export interface GameState {
   pot: number;
   communityCards: Card[];
   currentPlayerIndex: number;
+  currentPlayerId?: string;
   dealerIndex: number;
   smallBlindIndex: number;
   bigBlindIndex: number;
