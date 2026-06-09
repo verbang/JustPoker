@@ -1,13 +1,6 @@
 # JustPoker
 
-一个支持多人在线的扑克游戏平台，包含**德扑（Texas Hold'em）**和**抓兔（Catch Middle）**两种游戏模式。
-
-## 在线体验
-
-| 服务 | 地址 |
-|------|------|
-| 前端 | https://just-poker.vercel.app |
-| 后端 | https://justpoker-api.onrender.com |
+一个支持多人在线的扑克游戏平台，包含德扑（Texas Hold'em）和抓兔（Catch Middle）两种游戏模式。
 
 ## 游戏模式
 
@@ -24,7 +17,7 @@
 
 ### 抓兔（Catch Middle）
 
-3-4 人对局，5 轮定胜负：
+德州扑克变种，3-4 人对局，5 轮定胜负：
 
 - 54 张牌（含大小王作为万能牌）
 - 每轮发 5 张手牌，玩家选 2 张与公共牌组合成 3 张牌型
