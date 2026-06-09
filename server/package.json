@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/index.ts",
-    "build": "tsc && node scripts/clean-shared-build-artifacts.js",
+    "build": "tsc",
     "start": "node dist/server/src/index.js",
     "test": "jest"
   },
