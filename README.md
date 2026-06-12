@@ -173,6 +173,12 @@ git config --global --unset https.proxy
 cd server && npm test
 ```
 
+## 音效
+
+https://freesound.org/
+https://www.tosound.com/
+
+
 ## 文档
 
 - [游戏规则](justpoker/gamerule.md) — 德扑和抓兔的完整规则说明
