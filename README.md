@@ -116,6 +116,12 @@ cp .env.example .env
 - **prod**：连接 Vercel + Render
 
 ---
+## ⚠️ 数据库说明
+
+**当前项目并未实际使用数据库**：Supabase未活跃，免费资源被回收
+
+
+---
 
 ## ⚠️ Git 代理配置说明
 
